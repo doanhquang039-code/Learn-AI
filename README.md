@@ -1,7 +1,7 @@
 # Chủ đề 04: Nhận dạng hoạt động qua cảm biến smartphone
 
 Bài tập lớn môn Nhập môn Trí tuệ nhân tạo.
-Nhóm: ........................  |  Thành viên: ........................................
+
 
 ## 1. Bài toán
 Phân loại 6 hoạt động (walking, upstairs, downstairs, sitting, standing, laying) từ vector 561 đặc trưng cảm biến smartphone (gia tốc kế và con quay hồi chuyển) của bộ dữ liệu UCI Human Activity Recognition Using Smartphones.
