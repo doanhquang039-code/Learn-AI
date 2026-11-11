@@ -38,7 +38,7 @@ unzip -q har.zip
 unzip -q "UCI HAR Dataset.zip"      # file zip nằm bên trong file zip đầu
 
 # Huấn luyện, đánh giá và chạy demo
-python har_baseline_mlp.py --data "UCI HAR Dataset" --demo
+python "har_baseline_mlp (1).py" --data "UCI HAR Dataset" --demo
 ```
 Trên Google Colab, thêm dấu `!` ở đầu mỗi dòng lệnh. Kết quả (ảnh confusion matrix, mô hình `.joblib`) được lưu trong thư mục `outputs/`.
 
@@ -52,7 +52,7 @@ Trên Google Colab, thêm dấu `!` ở đầu mỗi dòng lệnh. Kết quả (
 - Kết quả có thể lệch nhẹ nếu dùng phiên bản scikit-learn khác.
 
 ## 6. Demo
-Hàm `predict_one(vector_561)` trong `har_baseline_mlp.py` nhận một vector 561 đặc trưng, trả về nhãn và xác suất. Chạy với `--demo` để thử trên dòng test số 0.
+Hàm `predict_one(vector_561)` trong `har_baseline_mlp (1).py` nhận một vector 561 đặc trưng, trả về nhãn và xác suất. Chạy với `--demo` để thử trên dòng test số 0.
 
 ## 7. Hạn chế
 Dữ liệu chỉ thu ở một loại thiết bị (Samsung Galaxy S II), một vị trí đeo (thắt lưng), 30 người và điều kiện cụ thể, nên không khẳng định ứng dụng đại trà. Đây là nhận dạng hoạt động, không dùng để suy đoán bệnh lý hay sức khỏe cá nhân.
@@ -61,6 +61,85 @@ Dữ liệu chỉ thu ở một loại thiết bị (Samsung Galaxy S II), một
 ```
 ├── README.md
 ├── requirements.txt
-├── har_baseline_mlp.py
+├── har_baseline_mlp (1).py
+├── web_app.py
+├── index.html
 └── outputs/          # ảnh confusion matrix và mô hình đã huấn luyện
+```
+
+## 9. Web dự đoán CSV
+
+Web dùng trực tiếp mô hình MLP đã lưu tại `outputs/mlp_har.joblib`, không huấn luyện
+lại khi tải tệp. Dependencies ghim `scikit-learn==1.6.1`, cùng phiên bản đã tạo model,
+để kết quả nhất quán với notebook/script Colab. Cùng một dòng đầu vào sẽ cho cùng dự
+đoán như hàm `predict_one`.
+
+CSV đầu vào cần có đúng **561 cột số trên mỗi dòng**, theo đúng thứ tự đặc trưng của
+UCI HAR. Có thể có hoặc không có dòng tên cột. Web xử lý tối đa 10.000 dòng và 10 MB
+mỗi lần; dữ liệu cảm biến thô chưa được hỗ trợ. Kết quả gồm nhãn dự đoán và xác suất
+từng lớp, có thể tải về thành CSV. Không có nhãn thật trong tệp đầu vào thì web không
+tính accuracy hay Macro-F1.
+
+### Chạy trên máy
+
+```bash
+pip install -r requirements.txt
+python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
+```
+
+Mở `http://127.0.0.1:8000`. Tài liệu API có tại `http://127.0.0.1:8000/docs`.
+
+Chạy test bằng:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+### Chạy trong Google Colab
+
+Sau khi đẩy phiên bản có `web_app.py` lên GitHub, chạy các ô sau trong notebook Colab
+để mở web qua cổng proxy của Colab:
+
+```python
+!git clone https://github.com/doanhquang039-code/Learn-AI.git /content/Learn-AI
+%cd /content/Learn-AI
+!pip install -r requirements.txt
+```
+
+```python
+import subprocess
+import time
+import urllib.error
+import urllib.request
+from google.colab.output import eval_js
+
+server = subprocess.Popen([
+    "python", "-m", "uvicorn", "web_app:app",
+    "--host", "0.0.0.0", "--port", "8000"
+])
+for _ in range(60):
+    if server.poll() is not None:
+        raise RuntimeError("Web API đã dừng khi khởi động.")
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8000/api/health", timeout=1):
+            pass
+        break
+    except (urllib.error.URLError, TimeoutError):
+        time.sleep(1)
+else:
+    raise RuntimeError("Web API không khởi động trong 60 giây.")
+print(eval_js("google.colab.kernel.proxyPort(8000)"))
+```
+
+Mở URL được in ra để dùng web. URL chỉ hoạt động khi runtime Colab còn chạy; cách này
+phù hợp demo, không phải dịch vụ công khai chạy liên tục. Có thể tạo CSV thử từ 100
+mẫu đầu của tập test như sau:
+
+```python
+import pandas as pd
+
+X_test = pd.read_csv(
+    "UCI HAR Dataset/test/X_test.txt", sep=r"\s+", header=None
+)
+X_test.head(100).to_csv("har_sample.csv", index=False, header=False)
 ```

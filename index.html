@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>Nhận dạng hoạt động - UCI HAR</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      color: #172033;
+      background: #f5f7fb;
+      font-synthesis: none;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at 10% 0%, #e6edff 0, transparent 38rem),
+        #f5f7fb;
+    }
+
+    main {
+      width: min(1050px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 56px 0;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: #5368d9;
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 5vw, 46px);
+      letter-spacing: -.04em;
+      line-height: 1.1;
+    }
+
+    .intro {
+      max-width: 720px;
+      margin: 16px 0 30px;
+      color: #5d667a;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    .card {
+      padding: 26px;
+      border: 1px solid #e6eaf2;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: 0 16px 48px rgba(27, 39, 74, .07);
+    }
+
+    .upload-box {
+      display: grid;
+      gap: 16px;
+      justify-items: start;
+      padding: 22px;
+      border: 1px dashed #b9c3d8;
+      border-radius: 14px;
+      background: #fbfcff;
+    }
+
+    .upload-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .upload-help, .note {
+      margin: 0;
+      color: #667085;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    input[type="file"] {
+      max-width: 100%;
+      color: #566176;
+    }
+
+    button, .download {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 10px;
+      background: #4658d8;
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    button:hover, .download:hover { background: #3445c0; }
+    button:disabled { opacity: .58; cursor: wait; }
+    .download { min-height: 38px; padding: 0 14px; font-size: 14px; }
+
+    .status {
+      min-height: 24px;
+      margin: 16px 0 0;
+      color: #4658d8;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .status.error { color: #b42318; }
+    .results { margin-top: 24px; }
+    .results[hidden] { display: none; }
+
+    .results-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    h2 { margin: 0; font-size: 21px; }
+
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 0 0 16px;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border: 1px solid #e6eaf2;
+      border-radius: 999px;
+      background: #f8f9fd;
+      color: #46516a;
+      font-size: 13px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 440px;
+      border: 1px solid #e8ebf2;
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    th, td {
+      padding: 11px 14px;
+      border-bottom: 1px solid #edf0f5;
+      text-align: left;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8f9fd;
+      color: #586278;
+      font-size: 12px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+    .note { margin-top: 16px; }
+
+    @media (max-width: 620px) {
+      main { padding: 34px 0; }
+      .card { padding: 17px; }
+      .upload-box { padding: 17px; }
+      .results-head { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">UCI Human Activity Recognition</p>
+    <h1>Nhận dạng hoạt động từ dữ liệu cảm biến</h1>
+    <p class="intro">
+      Tải lên CSV gồm các đặc trưng HAR để mô hình MLP đã huấn luyện dự đoán
+      hoạt động cho từng dòng và độ tin cậy tương ứng.
+    </p>
+
+    <section class="card" aria-label="Tải dữ liệu và kết quả">
+      <form id="upload-form">
+        <div class="upload-box">
+          <p class="upload-title">Chọn tệp CSV để dự đoán</p>
+          <p class="upload-help">
+            Mỗi dòng cần có đúng 561 giá trị số, theo đúng thứ tự đặc trưng UCI HAR.
+            Có thể có một dòng tiêu đề; tối đa 10 MB mỗi tệp.
+          </p>
+          <input id="csv-file" name="file" type="file" accept=".csv,text/csv" required>
+          <button id="submit-button" type="submit">Đọc CSV và dự đoán</button>
+        </div>
+      </form>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+
+      <section id="results" class="results" aria-labelledby="results-title" hidden>
+        <div class="results-head">
+          <h2 id="results-title">Kết quả dự đoán</h2>
+          <button id="download-button" class="download" type="button">Tải CSV kết quả</button>
+        </div>
+        <div id="summary" class="summary"></div>
+        <p id="table-caption" class="note"></p>
+        <div class="table-wrap">
+          <table>
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <p class="note">
+        CSV cảm biến thô chưa được hỗ trợ. Dữ liệu cần được chia cửa sổ và trích xuất
+        561 đặc trưng như bộ UCI HAR trước khi tải lên. Kết quả của web dùng cùng mô hình
+        <code>mlp_har.joblib</code> trong dự án; web không huấn luyện lại mô hình.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    const form = document.querySelector("#upload-form");
+    const fileInput = document.querySelector("#csv-file");
+    const submitButton = document.querySelector("#submit-button");
+    const downloadButton = document.querySelector("#download-button");
+    const statusElement = document.querySelector("#status");
+    const resultsElement = document.querySelector("#results");
+    const summaryElement = document.querySelector("#summary");
+    const tableCaption = document.querySelector("#table-caption");
+    const tableHead = document.querySelector("#table-head");
+    const tableBody = document.querySelector("#table-body");
+    let latestResults = null;
+
+    function addCell(row, value, isHeader = false) {
+      const cell = document.createElement(isHeader ? "th" : "td");
+      cell.textContent = value;
+      row.appendChild(cell);
+    }
+
+    function showResults(data) {
+      latestResults = data;
+      const labels = Object.keys(data.results[0].probabilities);
+      summaryElement.replaceChildren();
+
+      [
+        `Số dòng: ${data.rows.toLocaleString("vi-VN")}`,
+        `Mô hình: ${data.model}`,
+      ].forEach((text) => {
+        const pill = document.createElement("span");
+        pill.className = "pill";
+        pill.textContent = text;
+        summaryElement.appendChild(pill);
+      });
+
+      const headings = ["Dòng", "Dự đoán", "Độ tin cậy"];
+      tableHead.replaceChildren();
+      const headingRow = document.createElement("tr");
+      headings.forEach((heading) => addCell(headingRow, heading, true));
+      tableHead.appendChild(headingRow);
+
+      tableBody.replaceChildren();
+      data.results.slice(0, 100).forEach((item) => {
+        const row = document.createElement("tr");
+        addCell(row, String(item.row));
+        addCell(row, item.prediction);
+        addCell(row, `${(item.confidence * 100).toFixed(2)}%`);
+        tableBody.appendChild(row);
+      });
+
+      tableCaption.textContent = data.rows > 100
+        ? "Đang hiển thị 100 dòng đầu tiên; tệp tải xuống chứa toàn bộ kết quả."
+        : "Đã hiển thị toàn bộ kết quả.";
+      resultsElement.hidden = false;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const payload = new FormData();
+      payload.append("file", file);
+      submitButton.disabled = true;
+      resultsElement.hidden = true;
+      statusElement.classList.remove("error");
+      statusElement.textContent = "Đang đọc CSV và chạy mô hình…";
+
+      try {
+        const response = await fetch("/api/predict", { method: "POST", body: payload });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Không thể xử lý tệp.");
+        showResults(data);
+        statusElement.textContent = "Dự đoán hoàn tất.";
+      } catch (error) {
+        statusElement.classList.add("error");
+        statusElement.textContent = error.message || "Không kết nối được API.";
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+
+    downloadButton.addEventListener("click", () => {
+      if (!latestResults) return;
+      const labels = Object.keys(latestResults.results[0].probabilities);
+      const headers = ["row", "prediction", "confidence", ...labels.map((label) => `prob_${label}`)];
+      const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`;
+      const lines = [
+        headers.map(escapeCsv).join(","),
+        ...latestResults.results.map((item) => [
+          item.row,
+          item.prediction,
+          item.confidence,
+          ...labels.map((label) => item.probabilities[label]),
+        ].map(escapeCsv).join(",")),
+      ];
+      const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "har_predictions.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
