@@ -1,0 +1,130 @@
+{
+  "summary": [
+    {
+      "model": "Logistic Regression (Baseline)",
+      "accuracy": 0.9498,
+      "macro_f1": 0.95,
+      "note": "Chuẩn hóa StandardScaler + C=1.0 (nhanh, độ chính xác rất cao và ổn định)"
+    },
+    {
+      "model": "MLP (Cải tiến Neural Net)",
+      "accuracy": 0.9477,
+      "macro_f1": 0.948,
+      "note": "StandardScaler + Hidden (128,) + alpha=0.01 (tương đương LR, học đặc trưng phi tuyến)"
+    }
+  ],
+  "class_f1": [
+    {
+      "class": "WALKING",
+      "lr_precision": 0.9408,
+      "lr_recall": 0.994,
+      "lr_f1": 0.9667,
+      "mlp_precision": 0.9626,
+      "mlp_recall": 0.9859,
+      "mlp_f1": 0.9741,
+      "support": 496.0
+    },
+    {
+      "class": "WALKING_UPSTAIRS",
+      "lr_precision": 0.953,
+      "lr_recall": 0.9469,
+      "lr_f1": 0.9499,
+      "mlp_precision": 0.9415,
+      "mlp_recall": 0.9575,
+      "mlp_f1": 0.9495,
+      "support": 471.0
+    },
+    {
+      "class": "WALKING_DOWNSTAIRS",
+      "lr_precision": 0.9899,
+      "lr_recall": 0.9381,
+      "lr_f1": 0.9633,
+      "mlp_precision": 0.9726,
+      "mlp_recall": 0.931,
+      "mlp_f1": 0.9513,
+      "support": 420.0
+    },
+    {
+      "class": "SITTING",
+      "lr_precision": 0.9577,
+      "lr_recall": 0.8758,
+      "lr_f1": 0.9149,
+      "mlp_precision": 0.9664,
+      "mlp_recall": 0.8778,
+      "mlp_f1": 0.92,
+      "support": 491.0
+    },
+    {
+      "class": "STANDING",
+      "lr_precision": 0.8769,
+      "lr_recall": 0.9643,
+      "lr_f1": 0.9185,
+      "mlp_precision": 0.866,
+      "mlp_recall": 0.9718,
+      "mlp_f1": 0.9159,
+      "support": 532.0
+    },
+    {
+      "class": "LAYING",
+      "lr_precision": 1.0,
+      "lr_recall": 0.9739,
+      "lr_f1": 0.9868,
+      "mlp_precision": 0.9981,
+      "mlp_recall": 0.9572,
+      "mlp_f1": 0.9772,
+      "support": 537.0
+    }
+  ],
+  "seed_results": [
+    {
+      "seed": 42,
+      "lr_acc": 0.9498,
+      "lr_macro_f1": 0.95,
+      "mlp_acc": 0.9477,
+      "mlp_macro_f1": 0.948
+    },
+    {
+      "seed": 1,
+      "lr_acc": 0.9501,
+      "lr_macro_f1": 0.9503,
+      "mlp_acc": 0.9484,
+      "mlp_macro_f1": 0.9487
+    },
+    {
+      "seed": 7,
+      "lr_acc": 0.9491,
+      "lr_macro_f1": 0.9494,
+      "mlp_acc": 0.945,
+      "mlp_macro_f1": 0.9453
+    },
+    {
+      "seed": 21,
+      "lr_acc": 0.9515,
+      "lr_macro_f1": 0.9516,
+      "mlp_acc": 0.9491,
+      "mlp_macro_f1": 0.9495
+    },
+    {
+      "seed": 99,
+      "lr_acc": 0.9488,
+      "lr_macro_f1": 0.9489,
+      "mlp_acc": 0.9464,
+      "mlp_macro_f1": 0.9468
+    }
+  ],
+  "seed_stats": {
+    "lr_mean_acc": 0.9499,
+    "lr_std_acc": 0.001,
+    "lr_mean_f1": 0.95,
+    "lr_std_f1": 0.001,
+    "mlp_mean_acc": 0.9473,
+    "mlp_std_acc": 0.0016,
+    "mlp_mean_f1": 0.9477,
+    "mlp_std_f1": 0.0017
+  },
+  "error_analysis": {
+    "main_confusion": "SITTING vs STANDING",
+    "reason": "Tín hiệu gia tốc kế của hai trạng thái tĩnh gần như trùng nhau do góc nghiêng đùi/thắt lưng ít chênh lệch; mô hình khó phân biệt hơn so với nhóm vận động động.",
+    "low_confidence_threshold": 0.6
+  }
+}
