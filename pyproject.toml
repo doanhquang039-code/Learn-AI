@@ -1,0 +1,15 @@
+[project]
+name = "learn-ai-har-web"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi",
+    "joblib",
+    "numpy",
+    "pydantic",
+    "python-multipart",
+    "scikit-learn==1.6.1",
+]
+
+[tool.vercel]
+entrypoint = "web_app:app"
