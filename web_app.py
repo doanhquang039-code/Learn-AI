@@ -12,22 +12,27 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-APP_DIR = Path(__file__).resolve().parent
-OUTPUTS_DIR = APP_DIR / "outputs"
+APP_DIR    = Path(__file__).resolve().parent
+OUTPUTS    = APP_DIR / "outputs"
 SAMPLE_DIR = APP_DIR / "sample_data"
 INDEX_PATH = APP_DIR / "index.html"
 
-MLP_MODEL_PATH = OUTPUTS_DIR / "mlp_har.joblib"
-LR_MODEL_PATH = OUTPUTS_DIR / "lr_har.joblib"
-METRICS_PATH = OUTPUTS_DIR / "model_metrics.json"
+MLP_PATH     = OUTPUTS / "mlp_har.joblib"
+LR_PATH      = OUTPUTS / "lr_har.joblib"
+METRICS_PATH = OUTPUTS / "model_metrics.json"
+XTEST_PATH   = OUTPUTS / "X_test.npz"
 
-FEATURE_COUNT = 561
-MAX_UPLOAD_BYTES = 4 * 1024 * 1024
-MAX_ROWS = 10_000
-LOW_CONFIDENCE_THRESHOLD = 0.60
+FEATURE_COUNT           = 561
+MAX_UPLOAD_BYTES        = 10 * 1024 * 1024
+MAX_ROWS                = 10_000
+LOW_CONF_THRESHOLD      = 0.60
+CLASS_NAMES             = ["WALKING", "WALKING_UPSTAIRS", "WALKING_DOWNSTAIRS",
+                            "SITTING", "STANDING", "LAYING"]
 
-app = FastAPI(title="UCI HAR Activity Predictor - AI Realtime")
+app = FastAPI(title="UCI HAR – AI Realtime Demo")
 
+
+# ═══════════════════════════ helpers ════════════════════════════════════════
 
 def _is_number(value: str) -> bool:
     try:
@@ -39,261 +44,203 @@ def _is_number(value: str) -> bool:
 
 @lru_cache(maxsize=1)
 def get_model_bundles() -> Dict[str, Any]:
-    bundles = {}
-    if MLP_MODEL_PATH.is_file():
-        bundles["mlp"] = joblib.load(MLP_MODEL_PATH)
-    if LR_MODEL_PATH.is_file():
-        bundles["lr"] = joblib.load(LR_MODEL_PATH)
-
+    bundles: Dict[str, Any] = {}
+    if MLP_PATH.is_file():
+        bundles["mlp"] = joblib.load(MLP_PATH)
+    if LR_PATH.is_file():
+        bundles["lr"] = joblib.load(LR_PATH)
     if not bundles:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Không tìm thấy mô hình trong thư mục {OUTPUTS_DIR}",
-        )
+        raise HTTPException(503, detail="Không tìm thấy mô hình trong outputs/")
     return bundles
 
 
 def get_model_bundle() -> Dict[str, Any]:
-    """Compatibility helper returning default MLP model bundle."""
-    bundles = get_model_bundles()
-    return bundles.get("mlp") or next(iter(bundles.values()))
+    """Compat helper – trả về MLP bundle."""
+    b = get_model_bundles()
+    return b.get("mlp") or next(iter(b.values()))
 
 
-def get_default_class_names() -> List[str]:
-    bundles = get_model_bundles()
-    first_bundle = next(iter(bundles.values()))
-    return first_bundle["class_names"]
+@lru_cache(maxsize=1)
+def load_xtest() -> Optional[Dict[str, Any]]:
+    if not XTEST_PATH.is_file():
+        return None
+    data = np.load(str(XTEST_PATH))
+    return {"X": data["X"], "y": data["y"], "s": data["s"]}
 
 
-def _parse_numeric_row(row: List[str], row_number: int) -> List[float]:
+@lru_cache(maxsize=1)
+def load_json(path: Path) -> Optional[Dict[str, Any]]:
+    if not path.is_file():
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def predict_bundle(bundle: Dict[str, Any], features: np.ndarray) -> List[Dict[str, Any]]:
+    model       = bundle["model"]
+    class_names = bundle["class_names"]
+    preds       = model.predict(features)
+    probas      = model.predict_proba(features)
+    classes     = model.classes_
+
+    results = []
+    for i, pred in enumerate(preds):
+        prob_dict = {
+            class_names[int(c)]: round(float(probas[i, j]), 6)
+            for j, c in enumerate(classes)
+        }
+        conf = round(float(probas[i].max()), 6)
+        results.append({
+            "row":            i + 1,
+            "prediction":     class_names[int(pred)],
+            "confidence":     conf,
+            "low_confidence": conf < LOW_CONF_THRESHOLD,
+            "probabilities":  prob_dict,
+        })
+    return results
+
+
+def calc_metrics(true_labels: List[str], pred_labels: List[str],
+                 class_names: List[str]) -> Dict[str, Any]:
+    correct = sum(t == p for t, p in zip(true_labels, pred_labels))
+    total   = len(true_labels)
+    accuracy = round(correct / total, 4) if total else 0.0
+
+    f1s = []
+    for c in class_names:
+        tp = sum(1 for t, p in zip(true_labels, pred_labels) if t == c and p == c)
+        fp = sum(1 for t, p in zip(true_labels, pred_labels) if t != c and p == c)
+        fn = sum(1 for t, p in zip(true_labels, pred_labels) if t == c and p != c)
+        pr = tp / (tp + fp) if tp + fp else 0.0
+        rc = tp / (tp + fn) if tp + fn else 0.0
+        f1s.append(2 * pr * rc / (pr + rc) if pr + rc else 0.0)
+    macro_f1 = round(float(np.mean(f1s)), 4)
+
+    cm = []
+    for tc in class_names:
+        cm.append([sum(1 for t, p in zip(true_labels, pred_labels) if t == tc and p == pc)
+                   for pc in class_names])
+
+    return {"accuracy": accuracy, "macro_f1": macro_f1,
+            "correct": correct, "total": total,
+            "class_names": class_names, "confusion_matrix": cm}
+
+
+def _normalize_label(raw: str, class_names: List[str]) -> str:
+    s = raw.strip()
+    if s.isdigit():
+        idx = int(s)
+        return class_names[idx - 1] if 1 <= idx <= len(class_names) \
+               else (class_names[idx] if idx < len(class_names) else s)
+    return next((c for c in class_names if c.lower() == s.lower()), s)
+
+
+# ═══════════════════════════ parse CSV / text ═════════════════════════════════
+
+def _parse_row(row: List[str], row_number: int) -> List[float]:
     if len(row) != FEATURE_COUNT:
-        raise ValueError(
-            f"Dòng {row_number} có {len(row)} cột; cần đúng {FEATURE_COUNT} cột."
-        )
-
-    values = []
-    for column_number, value in enumerate(row, start=1):
-        clean_val = value.strip()
-        if clean_val == "":
-            raise ValueError(
-                f"Dữ liệu trống / thiếu giá trị ở dòng {row_number}, cột {column_number}."
-            )
+        raise ValueError(f"Dòng {row_number} có {len(row)} cột; cần đúng {FEATURE_COUNT}.")
+    vals = []
+    for col, v in enumerate(row, 1):
+        s = v.strip()
+        if not s:
+            raise ValueError(f"Dữ liệu trống ở dòng {row_number}, cột {col}.")
         try:
-            number = float(clean_val)
-        except ValueError as error:
-            raise ValueError(
-                f"Dữ liệu không phải số ở dòng {row_number}, cột {column_number} (giá trị: '{clean_val}')."
-            ) from error
-        if not np.isfinite(number):
-            raise ValueError(
-                f"Dữ liệu NaN/Inf ở dòng {row_number}, cột {column_number}."
-            )
-        values.append(number)
-    return values
+            n = float(s)
+        except ValueError:
+            raise ValueError(f"Dữ liệu không phải số ở dòng {row_number}, cột {col} ('{s}').")
+        if not np.isfinite(n):
+            raise ValueError(f"NaN/Inf ở dòng {row_number}, cột {col}.")
+        vals.append(n)
+    return vals
 
 
 def parse_feature_text(text: str) -> np.ndarray:
     text = text.strip()
     if not text:
-        raise ValueError("Vui lòng nhập hoặc dán vector đặc trưng.")
-
-    # Determine delimiter: comma if present, else whitespace
-    if "," in text:
-        tokens = [t.strip() for t in text.split(",")]
-    else:
-        tokens = text.split()
-
-    # Discard empty trailing token caused by trailing comma or newline
+        raise ValueError("Vui lòng nhập vector đặc trưng 561 số.")
+    tokens = [t.strip() for t in (text.split(",") if "," in text else text.split())]
     if tokens and tokens[-1] == "":
         tokens.pop()
-
     if len(tokens) != FEATURE_COUNT:
-        raise ValueError(
-            f"Vector có {len(tokens)} giá trị; yêu cầu đúng {FEATURE_COUNT} đặc trưng."
-        )
-
-    values = []
-    for idx, token in enumerate(tokens, start=1):
-        if not token:
-            raise ValueError(
-                f"Dữ liệu trống / thiếu giá trị ở vị trí đặc trưng thứ {idx}."
-            )
+        raise ValueError(f"Vector có {len(tokens)} giá trị; yêu cầu đúng {FEATURE_COUNT} đặc trưng.")
+    vals = []
+    for idx, t in enumerate(tokens, 1):
+        if not t:
+            raise ValueError(f"Dữ liệu trống / thiếu giá trị ở vị trí đặc trưng thứ {idx}.")
         try:
-            number = float(token)
-        except ValueError as error:
-            raise ValueError(
-                f"Dữ liệu không phải số ở vị trí đặc trưng thứ {idx} (giá trị: '{token}')."
-            ) from error
-        if not np.isfinite(number):
-            raise ValueError(
-                f"Dữ liệu NaN/Inf ở vị trí đặc trưng thứ {idx}."
-            )
-        values.append(number)
-
-    return np.asarray([values], dtype=np.float64)
+            n = float(t)
+        except ValueError:
+            raise ValueError(f"Dữ liệu không phải số ở vị trí đặc trưng thứ {idx} (giá trị: '{t}').")
+        if not np.isfinite(n):
+            raise ValueError(f"NaN/Inf ở vị trí đặc trưng thứ {idx}.")
+        vals.append(n)
+    return np.asarray([vals], dtype=np.float64)
 
 
 def parse_feature_csv(contents: bytes):
     try:
         text = contents.decode("utf-8-sig")
-    except UnicodeDecodeError as error:
-        raise ValueError("CSV phải được mã hóa UTF-8.") from error
+    except UnicodeDecodeError as e:
+        raise ValueError("CSV phải mã hóa UTF-8.") from e
 
     try:
-        raw_rows = [
-            [cell.strip() for cell in row]
-            for row in csv.reader(io.StringIO(text))
-            if any(cell.strip() for cell in row)
-        ]
-    except csv.Error as error:
-        raise ValueError("Không đọc được cấu trúc CSV.") from error
+        raw = [[c.strip() for c in r]
+               for r in csv.reader(io.StringIO(text))
+               if any(c.strip() for c in r)]
+    except csv.Error as e:
+        raise ValueError("Không đọc được cấu trúc CSV.") from e
 
-    if not raw_rows:
+    if not raw:
         raise ValueError("CSV không có dữ liệu.")
 
-    first_row = raw_rows[0]
+    # Detect header
+    first = raw[0]
     has_header = False
-
-    # Determine if first row is a pure header (column names row, not data).
-    # Strategy: a header row's cells are mostly non-numeric strings like "feature_0", "true_label".
-    # A data row that starts with a text label still has the remaining 561 cells as numbers.
-    # So: if first cell is non-numeric AND the SECOND cell is also non-numeric → almost certainly header.
-    # If first cell non-numeric but second cell IS numeric → data row with text label (not a header).
-    if len(first_row) >= 2:
-        first_non_num = not _is_number(first_row[0])
-        second_non_num = not _is_number(first_row[1])
-        # Count how many cells (excluding first) are numeric
-        rest_numeric_count = sum(1 for v in first_row[1:] if _is_number(v))
-        if first_non_num and second_non_num:
-            # Both first two cells are text → real header row (e.g. "true_label","feature_0","feature_1"...)
-            has_header = True
-        elif first_non_num and rest_numeric_count >= FEATURE_COUNT:
-            # First cell is text label, rest are 561 numeric features → data row with embedded label
-            has_header = False
+    if len(first) >= 2:
+        f0_text = not _is_number(first[0])
+        f1_text = not _is_number(first[1])
+        rest_num = sum(1 for v in first[1:] if _is_number(v))
+        if f0_text and f1_text:
+            has_header = True              # e.g. "true_label","feature_0",...
+        elif f0_text and rest_num >= FEATURE_COUNT:
+            has_header = False             # data row with text label at col 0
         else:
-            # Fallback: majority non-numeric → header
-            numeric_count = sum(1 for v in first_row if _is_number(v))
-            has_header = numeric_count < len(first_row) // 2
+            has_header = sum(1 for v in first if _is_number(v)) < len(first) // 2
     else:
-        numeric_count = sum(1 for v in first_row if _is_number(v))
-        has_header = numeric_count < len(first_row) // 2
+        has_header = sum(1 for v in first if _is_number(v)) < len(first) // 2
 
-    data_rows = raw_rows[1:] if has_header else raw_rows
+    data_rows = raw[1:] if has_header else raw
     if not data_rows:
-        raise ValueError("CSV chỉ có dòng tiêu đề, chưa có dòng dữ liệu.")
+        raise ValueError("CSV chỉ có tiêu đề, chưa có dòng dữ liệu.")
     if len(data_rows) > MAX_ROWS:
-        raise ValueError(f"Tối đa {MAX_ROWS:,} dòng dữ liệu mỗi lần tải lên.")
+        raise ValueError(f"Tối đa {MAX_ROWS:,} dòng mỗi lần tải lên.")
 
-    row_length = len(data_rows[0])
-    extracted_labels: Optional[List[str]] = None
+    row_len = len(data_rows[0])
+    labels: Optional[List[str]] = None
 
-    # Check if label column is included
-    if row_length == FEATURE_COUNT + 1:
-        # Check if label is at column 0 or last column
-        first_col_is_num = _is_number(data_rows[0][0])
-        last_col_is_num = _is_number(data_rows[0][-1])
-
-        if not first_col_is_num:
-            extracted_labels = [r[0] for r in data_rows]
+    if row_len == FEATURE_COUNT + 1:
+        f0_num = _is_number(data_rows[0][0])
+        fl_num = _is_number(data_rows[0][-1])
+        if not f0_num:
+            labels    = [r[0] for r in data_rows]
             data_rows = [r[1:] for r in data_rows]
-        elif not last_col_is_num:
-            extracted_labels = [r[-1] for r in data_rows]
+        elif not fl_num:
+            labels    = [r[-1] for r in data_rows]
             data_rows = [r[:-1] for r in data_rows]
         else:
-            # Both numeric: assume label is last column
-            extracted_labels = [r[-1] for r in data_rows]
+            labels    = [r[-1] for r in data_rows]
             data_rows = [r[:-1] for r in data_rows]
-    elif row_length != FEATURE_COUNT:
+    elif row_len != FEATURE_COUNT:
         raise ValueError(
-            f"Mỗi dòng cần có {FEATURE_COUNT} đặc trưng (hoặc {FEATURE_COUNT + 1} nếu kèm nhãn); dòng đầu có {row_length} cột."
-        )
+            f"Mỗi dòng cần {FEATURE_COUNT} đặc trưng (hoặc {FEATURE_COUNT+1} nếu kèm nhãn); "
+            f"dòng đầu có {row_len} cột.")
 
-    features = [
-        _parse_numeric_row(row, row_number)
-        for row_number, row in enumerate(data_rows, start=1)
-    ]
-    return np.asarray(features, dtype=np.float64), extracted_labels
+    features = [_parse_row(r, i) for i, r in enumerate(data_rows, 1)]
+    return np.asarray(features, dtype=np.float64), labels
 
 
-def predict_single_model(bundle: Dict[str, Any], features: np.ndarray) -> List[Dict[str, Any]]:
-    model = bundle["model"]
-    class_names = bundle["class_names"]
-    predictions = model.predict(features)
-    probabilities = model.predict_proba(features)
-    model_classes = model.classes_
-
-    results = []
-    for index, prediction in enumerate(predictions):
-        predicted_class = int(prediction)
-        prob_dict = {
-            class_names[int(cls)]: round(float(probabilities[index, col]), 6)
-            for col, cls in enumerate(model_classes)
-        }
-        confidence = round(float(probabilities[index].max()), 6)
-        results.append({
-            "row": index + 1,
-            "prediction": class_names[predicted_class],
-            "confidence": confidence,
-            "low_confidence": confidence < LOW_CONFIDENCE_THRESHOLD,
-            "probabilities": prob_dict,
-        })
-    return results
-
-
-def calculate_metrics_and_cm(true_labels: List[str], predicted_labels: List[str], class_names: List[str]):
-    # Normalize labels: if labels are integers 1..6, map them
-    normalized_true = []
-    for val in true_labels:
-        val_str = str(val).strip()
-        if val_str.isdigit():
-            idx = int(val_str)
-            if 1 <= idx <= len(class_names):
-                normalized_true.append(class_names[idx - 1])
-            elif 0 <= idx < len(class_names):
-                normalized_true.append(class_names[idx])
-            else:
-                normalized_true.append(val_str)
-        else:
-            # Map case-insensitively
-            matched = next((c for c in class_names if c.lower() == val_str.lower()), val_str)
-            normalized_true.append(matched)
-
-    correct_count = sum(1 for t, p in zip(normalized_true, predicted_labels) if t == p)
-    total_count = len(normalized_true)
-    accuracy = round(correct_count / total_count, 4) if total_count > 0 else 0.0
-
-    # Macro-F1 computation
-    f1_list = []
-    for c in class_names:
-        tp = sum(1 for t, p in zip(normalized_true, predicted_labels) if t == c and p == c)
-        fp = sum(1 for t, p in zip(normalized_true, predicted_labels) if t != c and p == c)
-        fn = sum(1 for t, p in zip(normalized_true, predicted_labels) if t == c and p != c)
-        prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = (2 * prec * rec) / (prec + rec) if (prec + rec) > 0 else 0.0
-        f1_list.append(f1)
-    macro_f1 = round(float(np.mean(f1_list)), 4) if f1_list else 0.0
-
-    # 6x6 Confusion Matrix
-    cm_grid = []
-    for true_c in class_names:
-        row = []
-        for pred_c in class_names:
-            count = sum(1 for t, p in zip(normalized_true, predicted_labels) if t == true_c and p == pred_c)
-            row.append(count)
-        cm_grid.append(row)
-
-    return {
-        "accuracy": accuracy,
-        "macro_f1": macro_f1,
-        "correct": correct_count,
-        "total": total_count,
-        "class_names": class_names,
-        "confusion_matrix": cm_grid,
-    }
-
-
-# ---------------- API ROUTES ----------------
+# ═══════════════════════════════ routes ══════════════════════════════════════
 
 @app.get("/", include_in_schema=False)
 def home():
@@ -301,266 +248,300 @@ def home():
 
 
 @app.get("/outputs/{filename}", include_in_schema=False)
-def get_output_file(filename: str):
-    file_path = OUTPUTS_DIR / filename
-    if not file_path.is_file():
-        raise HTTPException(status_code=404, detail="Không tìm thấy tệp kết quả.")
-    return FileResponse(file_path)
+def serve_output(filename: str):
+    p = OUTPUTS / filename
+    if not p.is_file():
+        raise HTTPException(404)
+    return FileResponse(p)
 
 
 @app.get("/api/health")
 def health():
-    bundles = get_model_bundles()
-    class_names = get_default_class_names()
+    b = get_model_bundles()
     return {
         "status": "ok",
-        "available_models": list(bundles.keys()),
-        "classes": class_names,
-        "low_confidence_threshold": LOW_CONFIDENCE_THRESHOLD,
+        "available_models": list(b.keys()),
+        "classes": CLASS_NAMES,
+        "low_confidence_threshold": LOW_CONF_THRESHOLD,
+        "xtest_available": XTEST_PATH.is_file(),
     }
 
 
 @app.get("/api/model-results")
-def get_model_results():
-    if not METRICS_PATH.is_file():
-        raise HTTPException(status_code=404, detail="Chưa có dữ liệu đánh giá mô hình trong outputs.")
-    with open(METRICS_PATH, "r", encoding="utf-8") as f:
-        metrics = json.load(f)
-
-    # Attach confusion matrix image URLs
-    metrics["images"] = {
-        "lr_confusion_matrix": "/outputs/cm_LogisticRegression.png",
+def model_results():
+    data = load_json(METRICS_PATH)
+    if not data:
+        raise HTTPException(404, "Chưa có outputs/model_metrics.json")
+    data.setdefault("images", {
+        "lr_confusion_matrix":  "/outputs/cm_LogisticRegression.png",
         "mlp_confusion_matrix": "/outputs/cm_MLP.png",
-    }
-    return metrics
+    })
+    return data
 
 
 @app.get("/api/samples")
 def get_samples():
-    """Returns curated preset samples from real_12_rows.csv."""
-    sample_file = SAMPLE_DIR / "real_12_rows.csv"
-    if not sample_file.is_file():
-        sample_file = APP_DIR / "real_12_rows.csv"
-    if not sample_file.is_file():
-        raise HTTPException(status_code=404, detail="Không tìm thấy file mẫu real_12_rows.csv")
+    for p in [SAMPLE_DIR / "real_12_rows.csv", APP_DIR / "real_12_rows.csv"]:
+        if p.is_file():
+            break
+    else:
+        raise HTTPException(404, "Không tìm thấy real_12_rows.csv")
 
-    with open(sample_file, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        header = next(reader)
+    with open(p, encoding="utf-8") as f:
+        rdr = csv.reader(f)
+        next(rdr)  # skip header
         samples = []
-        for idx, row in enumerate(reader, start=1):
-            true_label = row[0]
-            features = [float(x) for x in row[1:]]
+        for idx, row in enumerate(rdr, 1):
+            lbl   = row[0]
+            feats = [float(x) for x in row[1:]]
             samples.append({
-                "id": idx,
-                "label": f"Mẫu #{idx:02d} ({true_label})",
-                "true_label": true_label,
-                "preview": [round(x, 4) for x in features[:5]],
-                "features": features,
+                "id": idx, "true_label": lbl,
+                "label": f"Mẫu #{idx:02d}  ({lbl})",
+                "preview": [round(x, 4) for x in feats[:5]],
+                "features": feats,
             })
     return {"samples": samples}
 
 
 @app.get("/api/sequence")
 def get_sequence():
-    """Returns 20 consecutive samples for sequence replay simulation."""
-    json_path = SAMPLE_DIR / "real_20_sequence.json"
-    if not json_path.is_file():
-        raise HTTPException(status_code=404, detail="Chưa có dữ liệu chuỗi real_20_sequence.json.")
-    with open(json_path, "r", encoding="utf-8") as f:
+    p = SAMPLE_DIR / "real_20_sequence.json"
+    if not p.is_file():
+        raise HTTPException(404, "Không tìm thấy real_20_sequence.json")
+    with open(p, encoding="utf-8") as f:
         data = json.load(f)
-
-    bundles = get_model_bundles()
+    bundles  = get_model_bundles()
     features = np.asarray([item["features"] for item in data], dtype=np.float64)
-
-    mlp_results = predict_single_model(bundles["mlp"], features) if "mlp" in bundles else []
-    lr_results = predict_single_model(bundles["lr"], features) if "lr" in bundles else []
-
-    combined_steps = []
+    mlp_res  = predict_bundle(bundles["mlp"], features) if "mlp" in bundles else []
+    lr_res   = predict_bundle(bundles["lr"],  features) if "lr"  in bundles else []
+    steps = []
     for i, item in enumerate(data):
-        combined_steps.append({
-            "step": item["step"],
-            "true_label": item["true_label"],
-            "mlp": mlp_results[i] if mlp_results else None,
-            "lr": lr_results[i] if lr_results else None,
+        steps.append({
+            "step": item["step"], "true_label": item["true_label"],
+            "mlp": mlp_res[i] if mlp_res else None,
+            "lr":  lr_res[i]  if lr_res  else None,
         })
-
     return {
-        "title": "Mô phỏng chuỗi 20 mẫu kiểm thử liên tiếp",
-        "disclaimer": "⚠️ Lưu ý: Đây là mô phỏng tuần tự từ 20 mẫu kiểm thử đã thu thập trước, không phải tín hiệu thời gian thực từ cảm biến sống.",
-        "steps": combined_steps,
+        "disclaimer": "⚠️ Đây là mô phỏng tuần tự từ 20 mẫu kiểm thử đã thu thập trước, không phải tín hiệu cảm biến thời gian thực.",
+        "steps": steps,
     }
 
 
+# ─────────────── test-row lookup (requires X_test.npz) ───────────────────────
+
+@app.get("/api/test-row/{index}")
+def test_row(index: int, model_type: str = "both"):
+    if index < 0 or index > 2946:
+        raise HTTPException(400, "Chỉ số phải nằm trong [0, 2946].")
+    xtest = load_xtest()
+    if xtest is None:
+        raise HTTPException(503, "X_test.npz chưa được tạo. Hãy chạy generate_analysis.py trước.")
+    bundles = get_model_bundles()
+    cls     = CLASS_NAMES
+    feat    = xtest["X"][index : index + 1].astype(np.float64)
+    true_lbl = cls[int(xtest["y"][index])]
+    subject  = int(xtest["s"][index])
+
+    resp: Dict[str, Any] = {
+        "index": index, "subject": subject, "true_label": true_lbl,
+    }
+    if model_type in ("mlp", "both") and "mlp" in bundles:
+        resp["mlp"] = predict_bundle(bundles["mlp"], feat)[0]
+    if model_type in ("lr", "both") and "lr" in bundles:
+        resp["lr"] = predict_bundle(bundles["lr"], feat)[0]
+    if "mlp" in resp and "lr" in resp:
+        resp["agreement"] = resp["mlp"]["prediction"] == resp["lr"]["prediction"]
+    return resp
+
+
+# ─────────────── error analysis ──────────────────────────────────────────────
+
+@app.get("/api/errors")
+def get_errors(model: str = "mlp", page: int = 0, page_size: int = 50):
+    data = load_json(OUTPUTS / "error_analysis.json")
+    if not data:
+        raise HTTPException(404, "Chưa có error_analysis.json. Hãy chạy generate_analysis.py.")
+    key = "mlp_errors" if model == "mlp" else "lr_errors"
+    errors = data.get(key, [])
+    start  = page * page_size
+    return {
+        "model":      model,
+        "total":      data.get(f"{model}_total_wrong", len(errors)),
+        "page":       page,
+        "page_size":  page_size,
+        "errors":     errors[start : start + page_size],
+        "class_names": data.get("class_names", CLASS_NAMES),
+    }
+
+
+# ─────────────── subject analysis ────────────────────────────────────────────
+
+@app.get("/api/subject-analysis")
+def subject_analysis():
+    data = load_json(OUTPUTS / "subject_analysis.json")
+    if not data:
+        raise HTTPException(404, "Chưa có subject_analysis.json. Hãy chạy generate_analysis.py.")
+    return data
+
+
+# ─────────────── hyperparameter search ───────────────────────────────────────
+
+@app.get("/api/hyperparams")
+def hyperparams():
+    data = load_json(OUTPUTS / "hyperparams.json")
+    if not data:
+        raise HTTPException(404, "Chưa có hyperparams.json. Hãy chạy generate_analysis.py.")
+    return data
+
+
+# ─────────────── ablation study ──────────────────────────────────────────────
+
+@app.get("/api/ablation")
+def ablation():
+    data = load_json(OUTPUTS / "ablation.json")
+    if not data:
+        raise HTTPException(404, "Chưa có ablation.json. Hãy chạy generate_analysis.py.")
+    return data
+
+
+# ─────────────── predict-sample / predict-text / predict (batch) ─────────────
+
 class PredictTextInput(BaseModel):
-    text: str
-    model_type: str = "both"  # "mlp", "lr", "both"
-    true_label: Optional[str] = None
+    text:        str
+    model_type:  str = "both"
+    true_label:  Optional[str] = None
 
 
 @app.post("/api/predict-text")
 def predict_text(payload: PredictTextInput):
     try:
-        features = parse_feature_text(payload.text)
-    except ValueError as err:
-        raise HTTPException(status_code=422, detail=str(err)) from err
-
+        feat = parse_feature_text(payload.text)
+    except ValueError as e:
+        raise HTTPException(422, detail=str(e))
     bundles = get_model_bundles()
-    model_mode = payload.model_type.lower()
-
-    response: Dict[str, Any] = {
-        "true_label": payload.true_label,
-        "model_type": model_mode,
-    }
-
-    if model_mode in ("mlp", "both") and "mlp" in bundles:
-        response["mlp"] = predict_single_model(bundles["mlp"], features)[0]
-    if model_mode in ("lr", "both") and "lr" in bundles:
-        response["lr"] = predict_single_model(bundles["lr"], features)[0]
-
-    if "mlp" in response and "lr" in response:
-        response["agreement"] = response["mlp"]["prediction"] == response["lr"]["prediction"]
-
-    return response
+    mode    = payload.model_type.lower()
+    resp: Dict[str, Any] = {"true_label": payload.true_label, "model_type": mode}
+    if mode in ("mlp", "both") and "mlp" in bundles:
+        resp["mlp"] = predict_bundle(bundles["mlp"], feat)[0]
+    if mode in ("lr", "both") and "lr" in bundles:
+        resp["lr"] = predict_bundle(bundles["lr"], feat)[0]
+    if "mlp" in resp and "lr" in resp:
+        resp["agreement"] = resp["mlp"]["prediction"] == resp["lr"]["prediction"]
+    return resp
 
 
 class PredictSampleInput(BaseModel):
-    sample_id: int
-    model_type: str = "both"  # "mlp", "lr", "both"
+    sample_id:  int
+    model_type: str = "both"
 
 
 @app.post("/api/predict-sample")
 def predict_sample(payload: PredictSampleInput):
-    sample_file = SAMPLE_DIR / "real_12_rows.csv"
-    if not sample_file.is_file():
-        sample_file = APP_DIR / "real_12_rows.csv"
-    if not sample_file.is_file():
-        raise HTTPException(status_code=404, detail="Không tìm thấy tệp mẫu.")
+    for p in [SAMPLE_DIR / "real_12_rows.csv", APP_DIR / "real_12_rows.csv"]:
+        if p.is_file():
+            break
+    else:
+        raise HTTPException(404, "Không tìm thấy tệp mẫu.")
 
-    target_row = None
-    target_label = None
-    with open(sample_file, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        header = next(reader)
-        for idx, row in enumerate(reader, start=1):
+    target_lbl, target_feats = None, None
+    with open(p, encoding="utf-8") as f:
+        rdr = csv.reader(f)
+        next(rdr)
+        for idx, row in enumerate(rdr, 1):
             if idx == payload.sample_id:
-                target_label = row[0]
-                target_row = [float(x) for x in row[1:]]
+                target_lbl   = row[0]
+                target_feats = [float(x) for x in row[1:]]
                 break
+    if target_feats is None:
+        raise HTTPException(404, f"Không tìm thấy mẫu #{payload.sample_id}")
 
-    if target_row is None:
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy mẫu số #{payload.sample_id}")
-
-    features = np.asarray([target_row], dtype=np.float64)
+    feat    = np.asarray([target_feats], dtype=np.float64)
     bundles = get_model_bundles()
-    model_mode = payload.model_type.lower()
-
-    response: Dict[str, Any] = {
+    mode    = payload.model_type.lower()
+    resp: Dict[str, Any] = {
         "sample_id": payload.sample_id,
-        "true_label": target_label,
-        "model_type": model_mode,
+        "true_label": target_lbl, "model_type": mode,
     }
-
-    if model_mode in ("mlp", "both") and "mlp" in bundles:
-        response["mlp"] = predict_single_model(bundles["mlp"], features)[0]
-    if model_mode in ("lr", "both") and "lr" in bundles:
-        response["lr"] = predict_single_model(bundles["lr"], features)[0]
-
-    if "mlp" in response and "lr" in response:
-        response["agreement"] = response["mlp"]["prediction"] == response["lr"]["prediction"]
-
-    return response
+    if mode in ("mlp", "both") and "mlp" in bundles:
+        resp["mlp"] = predict_bundle(bundles["mlp"], feat)[0]
+    if mode in ("lr", "both") and "lr" in bundles:
+        resp["lr"]  = predict_bundle(bundles["lr"],  feat)[0]
+    if "mlp" in resp and "lr" in resp:
+        resp["agreement"] = resp["mlp"]["prediction"] == resp["lr"]["prediction"]
+    return resp
 
 
 @app.post("/api/predict")
 async def predict_csv(
-    file: UploadFile = File(...),
+    file:        UploadFile = File(...),
     labels_file: Optional[UploadFile] = File(None),
-    model_type: str = Form("mlp"),
+    model_type:  str = Form("mlp"),
 ):
     if not file.filename or Path(file.filename).suffix.casefold() != ".csv":
-        raise HTTPException(status_code=400, detail="Vui lòng tải lên tệp đặc trưng .csv.")
+        raise HTTPException(400, "Vui lòng tải lên tệp .csv.")
 
     try:
         contents = await file.read(MAX_UPLOAD_BYTES + 1)
         if len(contents) > MAX_UPLOAD_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=f"Tệp vượt quá giới hạn {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
-            )
+            raise HTTPException(413, f"Tệp vượt quá {MAX_UPLOAD_BYTES//(1024*1024)} MB.")
         features, extracted_labels = parse_feature_csv(contents)
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+    except ValueError as e:
+        raise HTTPException(422, detail=str(e))
     finally:
         await file.close()
 
-    # If separate labels file provided
     true_labels = extracted_labels
     if labels_file and labels_file.filename:
         try:
-            label_contents = await labels_file.read(MAX_UPLOAD_BYTES + 1)
-            label_text = label_contents.decode("utf-8-sig")
-            separate_labels = [line.strip() for line in label_text.splitlines() if line.strip()]
-            if len(separate_labels) == len(features):
-                true_labels = separate_labels
-            elif len(separate_labels) == len(features) + 1:
-                # Discard possible header
-                true_labels = separate_labels[1:]
+            lc = await labels_file.read(MAX_UPLOAD_BYTES + 1)
+            ltext  = lc.decode("utf-8-sig")
+            sep_lb = [ln.strip() for ln in ltext.splitlines() if ln.strip()]
+            if len(sep_lb) == len(features):
+                true_labels = sep_lb
+            elif len(sep_lb) == len(features) + 1:
+                true_labels = sep_lb[1:]
             else:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Số nhãn trong tệp nhãn ({len(separate_labels)}) không khớp số dòng đặc trưng ({len(features)}).",
-                )
-        except UnicodeDecodeError as err:
-            raise HTTPException(status_code=422, detail="Tệp nhãn phải được mã hóa UTF-8.") from err
+                raise HTTPException(422,
+                    f"Số nhãn ({len(sep_lb)}) ≠ số dòng đặc trưng ({len(features)}).")
+        except UnicodeDecodeError:
+            raise HTTPException(422, "Tệp nhãn phải mã hóa UTF-8.")
         finally:
             await labels_file.close()
 
-    bundles = get_model_bundles()
-    class_names = get_default_class_names()
-    model_mode = model_type.lower()
+    bundles  = get_model_bundles()
+    cls      = CLASS_NAMES
+    mode     = model_type.lower()
 
-    response: Dict[str, Any] = {
-        "model_type": model_mode,
-        "rows": len(features),
-        "has_ground_truth": true_labels is not None,
-    }
+    mlp_res = predict_bundle(bundles["mlp"], features) if mode in ("mlp", "both") and "mlp" in bundles else None
+    lr_res  = predict_bundle(bundles["lr"],  features) if mode in ("lr",  "both") and "lr"  in bundles else None
 
-    mlp_results = predict_single_model(bundles["mlp"], features) if (model_mode in ("mlp", "both") and "mlp" in bundles) else None
-    lr_results = predict_single_model(bundles["lr"], features) if (model_mode in ("lr", "both") and "lr" in bundles) else None
+    true_norm = None
+    if true_labels:
+        true_norm = [_normalize_label(l, cls) for l in true_labels]
 
-    # Merge results
     results = []
     for i in range(len(features)):
         item: Dict[str, Any] = {"row": i + 1}
-        if true_labels:
-            item["true_label"] = true_labels[i]
-
-        if model_mode == "both":
-            item["mlp"] = mlp_results[i]
-            item["lr"] = lr_results[i]
-            item["agreement"] = mlp_results[i]["prediction"] == lr_results[i]["prediction"]
-        elif model_mode == "lr" and lr_results:
-            item["prediction"] = lr_results[i]["prediction"]
-            item["confidence"] = lr_results[i]["confidence"]
-            item["low_confidence"] = lr_results[i]["low_confidence"]
-            item["probabilities"] = lr_results[i]["probabilities"]
+        if true_norm:
+            item["true_label"] = true_norm[i]
+        if mode == "both":
+            item["mlp"] = mlp_res[i]
+            item["lr"]  = lr_res[i]
+            item["agreement"] = mlp_res[i]["prediction"] == lr_res[i]["prediction"]
+        elif mode == "lr":
+            item.update({k: lr_res[i][k] for k in ("prediction","confidence","low_confidence","probabilities")})
         else:
-            item["prediction"] = mlp_results[i]["prediction"]
-            item["confidence"] = mlp_results[i]["confidence"]
-            item["low_confidence"] = mlp_results[i]["low_confidence"]
-            item["probabilities"] = mlp_results[i]["probabilities"]
+            item.update({k: mlp_res[i][k] for k in ("prediction","confidence","low_confidence","probabilities")})
         results.append(item)
 
-    response["results"] = results
-
-    # If ground truth labels are provided, compute evaluation metrics & confusion matrix
-    if true_labels:
-        if model_mode in ("mlp", "both") and mlp_results:
-            pred_mlp = [r["prediction"] for r in mlp_results]
-            response["mlp_metrics"] = calculate_metrics_and_cm(true_labels, pred_mlp, class_names)
-        if model_mode in ("lr", "both") and lr_results:
-            pred_lr = [r["prediction"] for r in lr_results]
-            response["lr_metrics"] = calculate_metrics_and_cm(true_labels, pred_lr, class_names)
-
-    return response
+    resp: Dict[str, Any] = {
+        "model_type": mode, "rows": len(results),
+        "has_ground_truth": true_norm is not None,
+        "results": results,
+    }
+    if true_norm:
+        if mlp_res:
+            resp["mlp_metrics"] = calc_metrics(true_norm, [r["prediction"] for r in mlp_res], cls)
+        if lr_res:
+            resp["lr_metrics"]  = calc_metrics(true_norm, [r["prediction"] for r in lr_res],  cls)
+    return resp
