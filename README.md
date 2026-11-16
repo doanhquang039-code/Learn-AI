@@ -44,6 +44,13 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
 │   ├── real_12_rows_labels.txt
 │   ├── real_20_sequence.csv
 │   ├── real_20_sequence.json
+│   ├── sensor_samples/             # 6 cửa sổ gia tốc mẫu từ UCI HAR, mỗi lớp một CSV
+│   │   ├── WALKING/TotalAcceleration.csv
+│   │   ├── WALKING_UPSTAIRS/TotalAcceleration.csv
+│   │   ├── WALKING_DOWNSTAIRS/TotalAcceleration.csv
+│   │   ├── SITTING/TotalAcceleration.csv
+│   │   ├── STANDING/TotalAcceleration.csv
+│   │   └── LAYING/TotalAcceleration.csv
 │   ├── bad_column_count.csv
 │   ├── bad_contains_text.csv
 │   └── bad_empty_cell.csv
@@ -79,6 +86,7 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
 7. **Kiểm tra CSV cảm biến thô:**
    - Tải tối đa 6 CSV thuộc các loại Accelerometer, AccelerometerUncalibrated, Annotation, Metadata, Orientation và TotalAcceleration để xem số dòng, tên cột và 8 dòng dữ liệu đầu tiên.
    - Đây là chức năng kiểm tra/xem trước; không dự đoán hoạt động từ dữ liệu cảm biến thô.
+   - Có 6 CSV mẫu TotalAcceleration, mỗi file là một cửa sổ 128 mẫu (2,56 giây) thuộc một lớp, trích từ tập test UCI HAR; nguồn và giấy phép được ghi tại mục 2.
 8. **Mô phỏng chuỗi 20 mẫu (Sequence Replay):**
    - Phát lại 20 cửa sổ dữ liệu kiểm thử liên tiếp theo thời gian thực (1 giây/bước) để quan sát chuyển đổi trạng thái hoạt động.
    - Có thông báo lưu ý rõ ràng: *Mô phỏng từ dữ liệu kiểm thử ghi trước, không phải cảm biến thời gian thực sống.*
