@@ -1406,6 +1406,7 @@
       e.preventDefault();
       const fileInput = document.getElementById("sensor-files");
       const files = Array.from(fileInput.files);
+      document.getElementById("upload-alert-box").replaceChildren();
       const alertBox = document.getElementById("sensor-inspect-alert");
       const resultsBox = document.getElementById("sensor-inspect-results");
       const status = document.getElementById("sensor-inspect-status");
