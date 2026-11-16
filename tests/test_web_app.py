@@ -1,6 +1,7 @@
 import csv
 import io
 import unittest
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -208,6 +209,23 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("561", response.json()["detail"])
         self.assertIn("TotalAcceleration.csv", response.json()["detail"])
 
+    def test_sample_files_have_expected_shapes_and_balanced_labels(self):
+        sample_dir = Path(__file__).resolve().parents[1] / "sample_data"
+        for row_count in (60, 120, 300, 600):
+            for suffix, parser in (
+                ("csv", parse_feature_csv),
+                ("xlsx", parse_feature_xlsx),
+            ):
+                sample_path = sample_dir / f"uci_har_{row_count}_rows_labeled.{suffix}"
+                self.assertLess(sample_path.stat().st_size, 4 * 1024 * 1024)
+                features, labels = parser(sample_path.read_bytes())
+                self.assertEqual(features.shape, (row_count, 561))
+                self.assertEqual(len(labels), row_count)
+                self.assertEqual(
+                    {labels.count(label) for label in set(labels)},
+                    {row_count // 6},
+                )
+
     def test_sensor_inspection_previews_csv_and_allows_empty_annotation(self):
         with TestClient(app) as client:
             response = client.post(
@@ -253,32 +271,39 @@ class WebAppTests(unittest.TestCase):
     def test_batch_prediction_compares_both_models_on_labeled_csv_and_xlsx(self):
         sample_dir = Path(__file__).resolve().parents[1] / "sample_data"
         with TestClient(app) as client:
-            for filename in (
-                "uci_har_60_rows_labeled.csv",
-                "uci_har_60_rows_labeled.xlsx",
-            ):
-                sample_path = sample_dir / filename
-                response = client.post(
-                    "/api/predict",
-                    files={"file": (filename, sample_path.read_bytes(), "application/octet-stream")},
-                    data={"model_type": "both"},
-                )
-                self.assertEqual(response.status_code, 200, response.text)
-                data = response.json()
-                self.assertEqual(data["rows"], 60)
-                self.assertTrue(data["has_ground_truth"])
-                self.assertIn("mlp_metrics", data)
-                self.assertIn("lr_metrics", data)
+            for row_count in (60, 600):
+                for suffix in ("csv", "xlsx"):
+                    filename = f"uci_har_{row_count}_rows_labeled.{suffix}"
+                    sample_path = sample_dir / filename
+                    response = client.post(
+                        "/api/predict",
+                        files={"file": (filename, sample_path.read_bytes(), "application/octet-stream")},
+                        data={"model_type": "both"},
+                    )
+                    self.assertEqual(response.status_code, 200, response.text)
+                    data = response.json()
+                    self.assertEqual(data["rows"], row_count)
+                    self.assertTrue(data["has_ground_truth"])
+                    self.assertIn("mlp_metrics", data)
+                    self.assertIn("lr_metrics", data)
 
     def test_sample_download_endpoint_serves_csv_and_excel(self):
         with TestClient(app) as client:
-            for filename in (
-                "uci_har_60_rows_labeled.csv",
-                "uci_har_60_rows_labeled.xlsx",
-            ):
+            filenames = [
+                f"uci_har_{row_count}_rows_labeled.{suffix}"
+                for row_count in (60, 120, 300, 600)
+                for suffix in ("csv", "xlsx")
+            ]
+            for filename in filenames:
                 response = client.get(f"/sample-data/{filename}")
                 self.assertEqual(response.status_code, 200)
                 self.assertGreater(len(response.content), 0)
+
+            response = client.get("/sample-data/uci_har_test_samples.zip")
+            self.assertEqual(response.status_code, 200)
+            with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+                self.assertIsNone(archive.testzip())
+                self.assertEqual(len(archive.namelist()), 9)
 
 
 if __name__ == "__main__":

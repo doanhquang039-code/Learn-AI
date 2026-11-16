@@ -44,6 +44,10 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
 │   ├── real_12_rows_labels.txt
 │   ├── uci_har_60_rows_labeled.csv  # 60 mẫu × 561 đặc trưng và nhãn
 │   ├── uci_har_60_rows_labeled.xlsx # Cùng dữ liệu ở định dạng Excel
+│   ├── uci_har_120_rows_labeled.{csv,xlsx}
+│   ├── uci_har_300_rows_labeled.{csv,xlsx}
+│   ├── uci_har_600_rows_labeled.{csv,xlsx}
+│   ├── uci_har_test_samples.zip     # Gói CSV/Excel các cỡ mẫu để tải một lần
 │   ├── real_20_sequence.csv
 │   ├── real_20_sequence.json
 │   ├── sensor_samples/             # 6 cửa sổ gia tốc mẫu từ UCI HAR, mỗi lớp một CSV
@@ -83,7 +87,7 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
    - Tab "Kết quả mô hình" nạp trực tiếp bảng Accuracy/Macro-F1, bảng F1 từng lớp, bảng 5 seed và 2 ảnh Confusion Matrix từ `outputs/`.
 6. **Tải CSV/Excel hàng loạt & Mini-Colab:**
    - Cho phép tải CSV hoặc Excel (`.xlsx`) nhiều dòng (Excel đọc trang tính đầu tiên), kèm tệp nhãn thật tùy chọn. Nếu có nhãn, web tự động tính Accuracy, Macro-F1 và vẽ Ma trận nhầm lẫn tương tác ngay trên web!
-   - Có file mẫu CSV/Excel gồm 60 mẫu, mỗi mẫu có 561 đặc trưng và nhãn lấy từ tập test UCI HAR để thử so sánh LR và MLP.
+   - Có bộ file mẫu CSV/Excel 60, 120, 300 và 600 dòng; mỗi dòng có 561 đặc trưng và nhãn từ tập test UCI HAR. Có thể tải toàn bộ dưới dạng ZIP để thử so sánh LR và MLP.
    - Cảnh báo độ tin cậy thấp khi xác suất cao nhất < 60%.
    - Nút tải kết quả dự đoán thành tệp CSV đầy đủ.
 7. **Kiểm tra CSV cảm biến thô:**

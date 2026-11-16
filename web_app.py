@@ -400,6 +400,13 @@ def serve_sample_data(filename: str):
     allowed_files = {
         "uci_har_60_rows_labeled.csv",
         "uci_har_60_rows_labeled.xlsx",
+        "uci_har_120_rows_labeled.csv",
+        "uci_har_120_rows_labeled.xlsx",
+        "uci_har_300_rows_labeled.csv",
+        "uci_har_300_rows_labeled.xlsx",
+        "uci_har_600_rows_labeled.csv",
+        "uci_har_600_rows_labeled.xlsx",
+        "uci_har_test_samples.zip",
     }
     if filename not in allowed_files:
         raise HTTPException(404)
