@@ -3,6 +3,7 @@ import io
 import unittest
 
 import numpy as np
+from openpyxl import Workbook
 from fastapi.testclient import TestClient
 
 from web_app import (
@@ -10,6 +11,7 @@ from web_app import (
     get_model_bundle,
     get_model_bundles,
     parse_feature_csv,
+    parse_feature_xlsx,
     parse_feature_text,
 )
 
@@ -21,6 +23,18 @@ def make_csv(rows, header=False):
         writer.writerow([f"feature_{index}" for index in range(len(rows[0]))])
     writer.writerows(rows)
     return output.getvalue().encode("utf-8")
+
+
+def make_xlsx(rows, header=False):
+    workbook = Workbook()
+    worksheet = workbook.active
+    if header:
+        worksheet.append([f"feature_{index}" for index in range(len(rows[0]))])
+    for row in rows:
+        worksheet.append(row)
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
 
 
 class WebAppTests(unittest.TestCase):
@@ -40,6 +54,29 @@ class WebAppTests(unittest.TestCase):
         features, labels = parse_feature_csv(make_csv(samples))
         self.assertEqual(features.shape, (1, 561))
         self.assertEqual(labels, ["WALKING"])
+
+    def test_parser_skips_label_header_with_numeric_feature_names(self):
+        samples = [["WALKING"] + [float(index) / 1000 for index in range(561)]]
+        rows = [["true_label"] + list(range(561))] + samples
+        features, labels = parse_feature_csv(make_csv(rows))
+        self.assertEqual(features.shape, (1, 561))
+        self.assertEqual(labels, ["WALKING"])
+
+    def test_xlsx_parser_accepts_header_and_embedded_label(self):
+        samples = [["WALKING"] + [float(index) / 1000 for index in range(561)]]
+        rows = [["true_label"] + list(range(561))] + samples
+        features, labels = parse_feature_xlsx(make_xlsx(rows))
+        self.assertEqual(features.shape, (1, 561))
+        self.assertEqual(labels, ["WALKING"])
+        np.testing.assert_array_equal(features[0], samples[0][1:])
+
+    def test_xlsx_parser_rejects_wrong_feature_count(self):
+        with self.assertRaisesRegex(ValueError, "561"):
+            parse_feature_xlsx(make_xlsx([[0.0] * 560]))
+
+    def test_xlsx_parser_rejects_invalid_workbook(self):
+        with self.assertRaisesRegex(ValueError, "không hợp lệ"):
+            parse_feature_xlsx(b"not an Excel workbook")
 
     def test_parser_rejects_wrong_feature_count(self):
         with self.assertRaisesRegex(ValueError, "561"):
@@ -95,6 +132,18 @@ class WebAppTests(unittest.TestCase):
         result = response.json()["results"][0]
         self.assertEqual(result["prediction"], bundle["class_names"][expected_prediction])
         self.assertEqual(result["confidence"], round(float(expected_probabilities.max()), 6))
+
+    def test_prediction_accepts_xlsx_upload(self):
+        features = np.zeros((1, 561), dtype=np.float64)
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/predict",
+                files={"file": ("sample.xlsx", make_xlsx(features.tolist()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+                data={"model_type": "mlp"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["rows"], 1)
 
     def test_predict_sample_and_compare_models(self):
         with TestClient(app) as client:

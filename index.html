@@ -528,7 +528,7 @@
     <!-- Navigation Tabs -->
     <nav class="tabs-nav" role="tablist">
       <button class="tab-btn active" data-tab="tab-quick">⚡ Thử mẫu & Dán số</button>
-      <button class="tab-btn" data-tab="tab-upload">📁 Tải CSV (Batch & Mini-Colab)</button>
+      <button class="tab-btn" data-tab="tab-upload">📁 Tải CSV/Excel (Batch & Mini-Colab)</button>
       <button class="tab-btn" data-tab="tab-simulation">⏱️ Mô phỏng chuỗi 20 mẫu</button>
       <button class="tab-btn" data-tab="tab-model-results">📊 Kết quả mô hình (outputs)</button>
       <button class="tab-btn" data-tab="tab-limitations">ℹ️ Hạn chế & Nguồn dữ liệu</button>
@@ -676,19 +676,19 @@
       </div>
     </section>
 
-    <!-- TAB 2: BATCH CSV UPLOAD & MINI-COLAB -->
+    <!-- TAB 2: BATCH CSV/EXCEL UPLOAD & MINI-COLAB -->
     <section id="tab-upload" class="tab-panel">
       <div class="card">
-        <h2 class="card-title">📁 Tải CSV nhiều dòng & Tự động đánh giá (Mini-Colab)</h2>
+        <h2 class="card-title">📁 Tải CSV/Excel nhiều dòng & Tự động đánh giá (Mini-Colab)</h2>
         <p class="card-desc">
-          Tải tệp CSV gồm các dòng 561 đặc trưng. Bạn có thể <strong>tải kèm tệp nhãn thật tùy chọn</strong> hoặc dùng CSV có sẵn cột nhãn thật để web tự động tính toán Accuracy, Macro-F1 và vẽ Ma trận nhầm lẫn (Confusion Matrix) trực quan!
+          Tải tệp CSV hoặc Excel (.xlsx) gồm các dòng 561 đặc trưng. Với Excel, web đọc trang tính đầu tiên. Bạn có thể <strong>tải kèm tệp nhãn thật tùy chọn</strong> hoặc dùng tệp có sẵn cột nhãn thật để web tự động tính Accuracy, Macro-F1 và vẽ Ma trận nhầm lẫn (Confusion Matrix)!
         </p>
 
         <form id="upload-form">
           <div class="form-grid">
             <div class="form-group">
-              <label for="csv-file">Tệp CSV đặc trưng (bắt buộc):</label>
-              <input type="file" id="csv-file" accept=".csv,text/csv" required>
+              <label for="feature-file">Tệp đặc trưng CSV/Excel (bắt buộc):</label>
+              <input type="file" id="feature-file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
               <span style="font-size: 12px; color: var(--text-muted);">Tối đa 4 MB trên Vercel, hỗ trợ tới 10.000 dòng.</span>
             </div>
 
@@ -1248,11 +1248,11 @@
 
     uploadForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const csvFileInput = document.getElementById("csv-file");
+      const featureFileInput = document.getElementById("feature-file");
       const labelsFileInput = document.getElementById("labels-file");
       const modelSelect = document.getElementById("upload-model-select");
 
-      const file = csvFileInput.files[0];
+      const file = featureFileInput.files[0];
       if (!file) return;
 
       const payload = new FormData();
@@ -1265,7 +1265,7 @@
       const submitBtn = document.getElementById("btn-submit-upload");
       const statusEl = document.getElementById("upload-status");
       submitBtn.disabled = true;
-      statusEl.textContent = "Đang đọc CSV và chạy mô hình...";
+      statusEl.textContent = "Đang đọc dữ liệu và chạy mô hình...";
       uploadAlertBox.replaceChildren();
       document.getElementById("mini-colab-section").hidden = true;
       document.getElementById("batch-results-section").hidden = true;
@@ -1273,7 +1273,7 @@
       try {
         const resp = await fetch("/api/predict", { method: "POST", body: payload });
         const data = await resp.json();
-        if (!resp.ok) throw new Error(data.detail || "Không thể xử lý tệp CSV.");
+        if (!resp.ok) throw new Error(data.detail || "Không thể xử lý tệp dữ liệu.");
 
         latestBatchResults = data;
         statusEl.textContent = `Dự đoán thành công ${data.rows.toLocaleString()} dòng.`;

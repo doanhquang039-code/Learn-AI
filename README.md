@@ -39,6 +39,7 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
 ├── real_12_rows.csv              # 12 mẫu kiểm thử thực tế kèm nhãn thật (~80 KB)
 ├── sample_data/                  # Dữ liệu mẫu kiểm thử và kịch bản lỗi
 │   ├── real_12_rows.csv
+│   ├── real_12_rows.xlsx           # 12 mẫu có nhãn, dùng thử upload Excel
 │   ├── real_12_rows_features_only.csv
 │   ├── real_12_rows_labels.txt
 │   ├── real_20_sequence.csv
@@ -71,8 +72,8 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
    - Có sẵn các nút bấm nhanh kịch bản kiểm tra lỗi (`bad_*.csv`).
 5. **Đọc trực tiếp kết quả từ `outputs/`:**
    - Tab "Kết quả mô hình" nạp trực tiếp bảng Accuracy/Macro-F1, bảng F1 từng lớp, bảng 5 seed và 2 ảnh Confusion Matrix từ `outputs/`.
-6. **Tải CSV hàng loạt & Mini-Colab:**
-   - Cho phép tải CSV nhiều dòng kèm tệp nhãn thật tùy chọn. Nếu có nhãn, web tự động tính Accuracy, Macro-F1 và vẽ Ma trận nhầm lẫn tương tác ngay trên web!
+6. **Tải CSV/Excel hàng loạt & Mini-Colab:**
+   - Cho phép tải CSV hoặc Excel (`.xlsx`) nhiều dòng (Excel đọc trang tính đầu tiên), kèm tệp nhãn thật tùy chọn. Nếu có nhãn, web tự động tính Accuracy, Macro-F1 và vẽ Ma trận nhầm lẫn tương tác ngay trên web!
    - Cảnh báo độ tin cậy thấp khi xác suất cao nhất < 60%.
    - Nút tải kết quả dự đoán thành tệp CSV đầy đủ.
 7. **Mô phỏng chuỗi 20 mẫu (Sequence Replay):**

@@ -7,3 +7,4 @@ fastapi
 httpx
 python-multipart
 uvicorn
+openpyxl>=3.1

@@ -2,14 +2,18 @@ import csv
 import io
 import json
 import os
+import zipfile
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from xml.etree.ElementTree import ParseError
 
 import joblib
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 from pydantic import BaseModel
 
 APP_DIR    = Path(__file__).resolve().parent
@@ -135,7 +139,7 @@ def _normalize_label(raw: str, class_names: List[str]) -> str:
     return next((c for c in class_names if c.lower() == s.lower()), s)
 
 
-# ═══════════════════════════ parse CSV / text ═════════════════════════════════
+# ═══════════════════════════ parse uploaded data / text ═══════════════════════
 
 def _parse_row(row: List[str], row_number: int) -> List[float]:
     if len(row) != FEATURE_COUNT:
@@ -191,8 +195,35 @@ def parse_feature_csv(contents: bytes):
     except csv.Error as e:
         raise ValueError("Không đọc được cấu trúc CSV.") from e
 
+    return _parse_feature_rows(raw, "CSV")
+
+
+def parse_feature_xlsx(contents: bytes):
+    try:
+        workbook = load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
+    except (InvalidFileException, zipfile.BadZipFile, OSError, ValueError) as e:
+        raise ValueError("Tệp Excel không hợp lệ hoặc không đọc được.") from e
+
+    try:
+        if not workbook.worksheets:
+            raise ValueError("Tệp Excel không có trang tính.")
+        worksheet = workbook.worksheets[0]
+        raw = [
+            ["" if value is None else str(value).strip() for value in row]
+            for row in worksheet.iter_rows(values_only=True)
+            if any(value is not None and str(value).strip() for value in row)
+        ]
+    except (zipfile.BadZipFile, OSError, ParseError, ValueError) as e:
+        raise ValueError("Tệp Excel không hợp lệ hoặc không đọc được.") from e
+    finally:
+        workbook.close()
+
+    return _parse_feature_rows(raw, "Excel")
+
+
+def _parse_feature_rows(raw: List[List[str]], source: str):
     if not raw:
-        raise ValueError("CSV không có dữ liệu.")
+        raise ValueError(f"{source} không có dữ liệu.")
 
     # Detect header
     first = raw[0]
@@ -204,7 +235,9 @@ def parse_feature_csv(contents: bytes):
         if f0_text and f1_text:
             has_header = True              # e.g. "true_label","feature_0",...
         elif f0_text and rest_num >= FEATURE_COUNT:
-            has_header = False             # data row with text label at col 0
+            has_header = first[0].strip().casefold() in {
+                "label", "true_label", "activity", "class", "target"
+            }
         else:
             has_header = sum(1 for v in first if _is_number(v)) < len(first) // 2
     else:
@@ -212,7 +245,7 @@ def parse_feature_csv(contents: bytes):
 
     data_rows = raw[1:] if has_header else raw
     if not data_rows:
-        raise ValueError("CSV chỉ có tiêu đề, chưa có dòng dữ liệu.")
+        raise ValueError(f"{source} chỉ có tiêu đề, chưa có dòng dữ liệu.")
     if len(data_rows) > MAX_ROWS:
         raise ValueError(f"Tối đa {MAX_ROWS:,} dòng mỗi lần tải lên.")
 
@@ -477,14 +510,16 @@ async def predict_csv(
     labels_file: Optional[UploadFile] = File(None),
     model_type:  str = Form("mlp"),
 ):
-    if not file.filename or Path(file.filename).suffix.casefold() != ".csv":
-        raise HTTPException(400, "Vui lòng tải lên tệp .csv.")
+    suffix = Path(file.filename).suffix.casefold() if file.filename else ""
+    if suffix not in (".csv", ".xlsx"):
+        raise HTTPException(400, "Vui lòng tải lên tệp .csv hoặc .xlsx.")
 
     try:
         contents = await file.read(MAX_UPLOAD_BYTES + 1)
         if len(contents) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, f"Tệp vượt quá {MAX_UPLOAD_BYTES//(1024*1024)} MB.")
-        features, extracted_labels = parse_feature_csv(contents)
+        parser = parse_feature_xlsx if suffix == ".xlsx" else parse_feature_csv
+        features, extracted_labels = parser(contents)
     except ValueError as e:
         raise HTTPException(422, detail=str(e))
     finally:
