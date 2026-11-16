@@ -528,7 +528,7 @@
     <!-- Navigation Tabs -->
     <nav class="tabs-nav" role="tablist">
       <button class="tab-btn active" data-tab="tab-quick">⚡ Thử mẫu & Dán số</button>
-      <button class="tab-btn" data-tab="tab-upload">📁 Tải CSV/Excel (Batch & Mini-Colab)</button>
+      <button class="tab-btn" data-tab="tab-upload">📁 Tải dữ liệu CSV/Excel</button>
       <button class="tab-btn" data-tab="tab-simulation">⏱️ Mô phỏng chuỗi 20 mẫu</button>
       <button class="tab-btn" data-tab="tab-model-results">📊 Kết quả mô hình (outputs)</button>
       <button class="tab-btn" data-tab="tab-limitations">ℹ️ Hạn chế & Nguồn dữ liệu</button>
@@ -756,6 +756,32 @@
           </div>
           <p id="batch-caption" style="font-size: 12px; color: var(--text-muted); margin-top: 8px;"></p>
         </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">📡 Thử file cảm biến gốc</h2>
+        <p class="card-desc">
+          Chọn một hoặc nhiều CSV cảm biến để kiểm tra tên cột, số dòng và xem trước dữ liệu.
+          Hỗ trợ Accelerometer, AccelerometerUncalibrated, Annotation, Metadata, Orientation và TotalAcceleration.
+          Chức năng này chỉ đọc/xem trước dữ liệu, <strong>chưa dự đoán hoạt động</strong>.
+        </p>
+
+        <form id="sensor-inspect-form">
+          <div class="form-group">
+            <label for="sensor-files">Các file CSV cảm biến (tối đa 6 file):</label>
+            <input type="file" id="sensor-files" accept=".csv,text/csv" multiple required>
+            <span style="font-size: 12px; color: var(--text-muted);">
+              Tổng dung lượng tối đa 4 MB. Tệp rỗng như Annotation.csv vẫn được hiển thị để kiểm tra.
+            </span>
+          </div>
+          <div class="btn-row">
+            <button type="submit" id="btn-inspect-sensors" class="btn btn-primary">🔎 Đọc & xem trước CSV cảm biến</button>
+            <span id="sensor-inspect-status" style="font-size: 14px; font-weight: 600;"></span>
+          </div>
+        </form>
+
+        <div id="sensor-inspect-alert"></div>
+        <div id="sensor-inspect-results" class="result-box" hidden></div>
       </div>
     </section>
 
@@ -1372,6 +1398,113 @@
         statusEl.textContent = "";
       } finally {
         submitBtn.disabled = false;
+      }
+    });
+
+    const sensorInspectForm = document.getElementById("sensor-inspect-form");
+    sensorInspectForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fileInput = document.getElementById("sensor-files");
+      const files = Array.from(fileInput.files);
+      const alertBox = document.getElementById("sensor-inspect-alert");
+      const resultsBox = document.getElementById("sensor-inspect-results");
+      const status = document.getElementById("sensor-inspect-status");
+      const submitButton = document.getElementById("btn-inspect-sensors");
+
+      alertBox.replaceChildren();
+      resultsBox.replaceChildren();
+      resultsBox.hidden = true;
+
+      if (!files.length) return;
+      if (files.length > 6) {
+        const error = document.createElement("div");
+        error.className = "alert alert-error";
+        error.textContent = "Chỉ chọn tối đa 6 file cảm biến mỗi lần.";
+        alertBox.appendChild(error);
+        return;
+      }
+
+      const payload = new FormData();
+      files.forEach((file) => payload.append("files", file));
+      submitButton.disabled = true;
+      status.textContent = "Đang đọc các CSV cảm biến...";
+
+      try {
+        const response = await fetch("/api/inspect-sensor-files", {
+          method: "POST",
+          body: payload,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || "Không thể đọc các file cảm biến.");
+        }
+
+        status.textContent =
+          `Đã đọc ${data.file_count} file, tổng cộng ${data.total_rows.toLocaleString()} dòng dữ liệu.`;
+        resultsBox.hidden = false;
+
+        data.files.forEach((file) => {
+          const card = document.createElement("div");
+          card.className = "model-card";
+          card.style.marginBottom = "14px";
+
+          const heading = document.createElement("h3");
+          heading.className = "card-title";
+          heading.textContent = `${file.sensor_type} — ${file.filename}`;
+          card.appendChild(heading);
+
+          const summary = document.createElement("p");
+          summary.className = "card-desc";
+          summary.textContent = file.empty
+            ? "Tệp rỗng, không có dòng dữ liệu."
+            : `${file.rows.toLocaleString()} dòng dữ liệu · ${file.columns.length} cột`;
+          card.appendChild(summary);
+
+          if (!file.empty) {
+            const tableContainer = document.createElement("div");
+            tableContainer.className = "table-container";
+            const table = document.createElement("table");
+            const thead = document.createElement("thead");
+            const headerRow = document.createElement("tr");
+            file.columns.forEach((column) => {
+              const cell = document.createElement("th");
+              cell.textContent = column;
+              headerRow.appendChild(cell);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement("tbody");
+            file.preview.forEach((values) => {
+              const row = document.createElement("tr");
+              values.forEach((value) => {
+                const cell = document.createElement("td");
+                cell.textContent = value;
+                row.appendChild(cell);
+              });
+              tbody.appendChild(row);
+            });
+            table.appendChild(tbody);
+            tableContainer.appendChild(table);
+            card.appendChild(tableContainer);
+
+            const caption = document.createElement("span");
+            caption.style.fontSize = "12px";
+            caption.style.color = "var(--text-muted)";
+            caption.textContent = `Hiển thị ${file.preview.length} dòng đầu tiên.`;
+            card.appendChild(caption);
+          }
+
+          resultsBox.appendChild(card);
+        });
+      } catch (error) {
+        const message = document.createElement("div");
+        message.className = "alert alert-error";
+        message.textContent = `❌ ${error.message}`;
+        alertBox.appendChild(message);
+        status.textContent = "";
+      } finally {
+        submitButton.disabled = false;
       }
     });
 

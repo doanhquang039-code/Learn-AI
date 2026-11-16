@@ -205,6 +205,48 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
 
+    def test_sensor_inspection_previews_csv_and_allows_empty_annotation(self):
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/inspect-sensor-files",
+                files=[
+                    ("files", ("TotalAcceleration.csv", b"time,seconds_elapsed,z,y,x\n1,0.02,9.8,0.1,0.2\n2,0.04,9.7,0.2,0.3\n", "text/csv")),
+                    ("files", ("Annotation.csv", b"", "text/csv")),
+                ],
+            )
+
+        self.assertEqual(response.status_code, 200)
+        result = response.json()
+        self.assertEqual(result["file_count"], 2)
+        self.assertEqual(result["total_rows"], 2)
+        self.assertEqual(result["files"][0]["sensor_type"], "TotalAcceleration")
+        self.assertEqual(result["files"][0]["columns"], [
+            "time", "seconds_elapsed", "z", "y", "x",
+        ])
+        self.assertEqual(result["files"][0]["rows"], 2)
+        self.assertEqual(result["files"][1]["sensor_type"], "Annotation")
+        self.assertTrue(result["files"][1]["empty"])
+
+    def test_sensor_inspection_rejects_unknown_file_name(self):
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/inspect-sensor-files",
+                files={"files": ("custom.csv", b"a,b\n1,2\n", "text/csv")},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("6 loại hỗ trợ", response.json()["detail"])
+
+    def test_sensor_inspection_rejects_inconsistent_csv_rows(self):
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/inspect-sensor-files",
+                files={"files": ("TotalAcceleration.csv", b"time,x,y,z\n1,2,3,4\n5,6\n", "text/csv")},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("dòng 3", response.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

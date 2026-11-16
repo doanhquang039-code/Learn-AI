@@ -2,8 +2,10 @@ import csv
 import io
 import json
 import os
+import re
 import zipfile
 from functools import lru_cache
+from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from xml.etree.ElementTree import ParseError
@@ -29,9 +31,20 @@ XTEST_PATH   = OUTPUTS / "X_test.npz"
 FEATURE_COUNT           = 561
 MAX_UPLOAD_BYTES        = 10 * 1024 * 1024
 MAX_ROWS                = 10_000
+MAX_SENSOR_UPLOAD_BYTES = 4 * 1024 * 1024
+MAX_SENSOR_ROWS         = 100_000
+SENSOR_PREVIEW_ROWS     = 8
 LOW_CONF_THRESHOLD      = 0.60
 CLASS_NAMES             = ["WALKING", "WALKING_UPSTAIRS", "WALKING_DOWNSTAIRS",
                             "SITTING", "STANDING", "LAYING"]
+SENSOR_FILE_TYPES       = {
+    "accelerometer": "Accelerometer",
+    "accelerometeruncalibrated": "AccelerometerUncalibrated",
+    "annotation": "Annotation",
+    "metadata": "Metadata",
+    "orientation": "Orientation",
+    "totalacceleration": "TotalAcceleration",
+}
 
 app = FastAPI(title="UCI HAR – AI Realtime Demo")
 
@@ -44,6 +57,98 @@ def _is_number(value: str) -> bool:
         return True
     except (TypeError, ValueError):
         return False
+
+
+def inspect_sensor_csv(filename: str, contents: bytes) -> Dict[str, Any]:
+    if Path(filename).suffix.casefold() != ".csv":
+        raise ValueError(f"{filename}: chỉ hỗ trợ tệp CSV.")
+
+    stem = Path(filename).stem
+    sensor_key = re.sub(r"[^a-z0-9]", "", stem.casefold())
+    sensor_type = SENSOR_FILE_TYPES.get(sensor_key)
+    if sensor_type is None:
+        allowed = ", ".join(f"{name}.csv" for name in SENSOR_FILE_TYPES.values())
+        raise ValueError(f"Tên tệp '{filename}' không thuộc 6 loại hỗ trợ: {allowed}.")
+
+    try:
+        text = contents.decode("utf-8-sig")
+    except UnicodeDecodeError as e:
+        raise ValueError(f"{filename}: CSV phải mã hóa UTF-8.") from e
+
+    if not text.strip():
+        return {
+            "filename": filename,
+            "sensor_type": sensor_type,
+            "columns": [],
+            "rows": 0,
+            "preview": [],
+            "empty": True,
+        }
+
+    try:
+        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+
+    try:
+        reader = csv.reader(io.StringIO(text), dialect)
+        first_row = next(
+            (row for row in reader if any(cell.strip() for cell in row)),
+            None,
+        )
+        if first_row is None:
+            return {
+                "filename": filename,
+                "sensor_type": sensor_type,
+                "columns": [],
+                "rows": 0,
+                "preview": [],
+                "empty": True,
+            }
+
+        first_row = [cell.strip() for cell in first_row]
+        has_header = any(not _is_number(cell) for cell in first_row)
+        if has_header:
+            columns = [
+                value or f"Cột {index}"
+                for index, value in enumerate(first_row, 1)
+            ]
+            data_rows = reader
+            first_data_row_number = 2
+        else:
+            columns = [f"Cột {index}" for index in range(1, len(first_row) + 1)]
+            data_rows = chain([first_row], reader)
+            first_data_row_number = 1
+
+        preview = []
+        row_count = 0
+        for row_number, row in enumerate(data_rows, first_data_row_number):
+            row = [cell.strip() for cell in row]
+            if not any(row):
+                continue
+            if len(row) != len(columns):
+                raise ValueError(
+                    f"{filename}: dòng {row_number} có {len(row)} cột; "
+                    f"cần {len(columns)} cột như tiêu đề."
+                )
+            row_count += 1
+            if row_count > MAX_SENSOR_ROWS:
+                raise ValueError(
+                    f"{filename}: vượt quá giới hạn {MAX_SENSOR_ROWS:,} dòng."
+                )
+            if len(preview) < SENSOR_PREVIEW_ROWS:
+                preview.append(row)
+    except csv.Error as e:
+        raise ValueError(f"{filename}: không đọc được cấu trúc CSV.") from e
+
+    return {
+        "filename": filename,
+        "sensor_type": sensor_type,
+        "columns": columns,
+        "rows": row_count,
+        "preview": preview,
+        "empty": row_count == 0,
+    }
 
 
 @lru_cache(maxsize=1)
@@ -297,6 +402,51 @@ def health():
         "classes": CLASS_NAMES,
         "low_confidence_threshold": LOW_CONF_THRESHOLD,
         "xtest_available": XTEST_PATH.is_file(),
+    }
+
+
+@app.post("/api/inspect-sensor-files")
+async def inspect_sensor_files(files: List[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(422, "Chọn ít nhất một tệp cảm biến CSV.")
+    if len(files) > len(SENSOR_FILE_TYPES):
+        raise HTTPException(422, "Mỗi lần có thể tải tối đa 6 tệp cảm biến.")
+
+    total_bytes = 0
+    seen_types = set()
+    inspected_files = []
+    try:
+        for file in files:
+            filename = file.filename or ""
+            stem = Path(filename).stem
+            sensor_key = re.sub(r"[^a-z0-9]", "", stem.casefold())
+            if sensor_key in seen_types:
+                raise HTTPException(
+                    422, f"Chỉ tải một tệp cho mỗi loại cảm biến ({stem})."
+                )
+            seen_types.add(sensor_key)
+
+            remaining_bytes = MAX_SENSOR_UPLOAD_BYTES - total_bytes
+            contents = await file.read(remaining_bytes + 1)
+            total_bytes += len(contents)
+            if total_bytes > MAX_SENSOR_UPLOAD_BYTES:
+                raise HTTPException(
+                    413,
+                    f"Tổng dung lượng các tệp vượt quá "
+                    f"{MAX_SENSOR_UPLOAD_BYTES // (1024 * 1024)} MB.",
+                )
+
+            inspected_files.append(inspect_sensor_csv(filename, contents))
+    except ValueError as e:
+        raise HTTPException(422, detail=str(e)) from e
+    finally:
+        for file in files:
+            await file.close()
+
+    return {
+        "files": inspected_files,
+        "file_count": len(inspected_files),
+        "total_rows": sum(item["rows"] for item in inspected_files),
     }
 
 

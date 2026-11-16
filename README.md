@@ -54,7 +54,7 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
 │   ├── mlp_har.joblib
 │   └── model_metrics.json        # Accuracy, Macro-F1, F1 từng lớp, bảng 5 seed
 └── tests/
-    └── test_web_app.py           # 11 ca kiểm thử đơn vị tự động
+    └── test_web_app.py           # Kiểm thử parser và API
 ```
 
 ## 5. Các tính năng nổi bật trên Web App
@@ -76,10 +76,13 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
    - Cho phép tải CSV hoặc Excel (`.xlsx`) nhiều dòng (Excel đọc trang tính đầu tiên), kèm tệp nhãn thật tùy chọn. Nếu có nhãn, web tự động tính Accuracy, Macro-F1 và vẽ Ma trận nhầm lẫn tương tác ngay trên web!
    - Cảnh báo độ tin cậy thấp khi xác suất cao nhất < 60%.
    - Nút tải kết quả dự đoán thành tệp CSV đầy đủ.
-7. **Mô phỏng chuỗi 20 mẫu (Sequence Replay):**
+7. **Kiểm tra CSV cảm biến thô:**
+   - Tải tối đa 6 CSV thuộc các loại Accelerometer, AccelerometerUncalibrated, Annotation, Metadata, Orientation và TotalAcceleration để xem số dòng, tên cột và 8 dòng dữ liệu đầu tiên.
+   - Đây là chức năng kiểm tra/xem trước; không dự đoán hoạt động từ dữ liệu cảm biến thô.
+8. **Mô phỏng chuỗi 20 mẫu (Sequence Replay):**
    - Phát lại 20 cửa sổ dữ liệu kiểm thử liên tiếp theo thời gian thực (1 giây/bước) để quan sát chuyển đổi trạng thái hoạt động.
    - Có thông báo lưu ý rõ ràng: *Mô phỏng từ dữ liệu kiểm thử ghi trước, không phải cảm biến thời gian thực sống.*
-8. **Trang Hạn chế & Nguồn dữ liệu:**
+9. **Trang Hạn chế & Nguồn dữ liệu:**
    - Giấy phép CC BY 4.0, trích dẫn khoa học chính thức, quy trình trích xuất đặc trưng và các giới hạn thực tế của bài toán.
 
 ## 6. Hướng dẫn chạy
