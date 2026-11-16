@@ -681,19 +681,29 @@
       <div class="card">
         <h2 class="card-title">📁 Tải CSV/Excel nhiều dòng & Tự động đánh giá (Mini-Colab)</h2>
         <p class="card-desc">
-          Tải tệp CSV hoặc Excel (.xlsx) gồm các dòng 561 đặc trưng. Với Excel, web đọc trang tính đầu tiên. Bạn có thể <strong>tải kèm tệp nhãn thật tùy chọn</strong> hoặc dùng tệp có sẵn cột nhãn thật để web tự động tính Accuracy, Macro-F1 và vẽ Ma trận nhầm lẫn (Confusion Matrix)!
+          Mỗi mẫu cần <strong>561 đặc trưng số</strong>. Với Excel (.xlsx), web đọc trang tính đầu tiên. Có thể kèm nhãn thật để tính Accuracy, Macro-F1 và Ma trận nhầm lẫn.
         </p>
+
+        <div class="alert alert-info">
+          <span>
+            <strong>Lưu ý:</strong> CSV cảm biến thô như TotalAcceleration.csv (5 cột) không dùng trực tiếp được với hai mô hình này.
+            Thử file mẫu 60 dòng, đủ 561 đặc trưng:
+            <a href="/sample-data/uci_har_60_rows_labeled.csv" download>tải CSV</a> ·
+            <a href="/sample-data/uci_har_60_rows_labeled.xlsx" download>tải Excel</a>.
+            File mẫu đã kèm nhãn; chọn “So sánh cả hai mô hình” để chạy LR và MLP.
+          </span>
+        </div>
 
         <form id="upload-form">
           <div class="form-grid">
             <div class="form-group">
-              <label for="feature-file">Tệp đặc trưng CSV/Excel (bắt buộc):</label>
+              <label for="feature-file">Tệp đặc trưng 561 cột CSV/Excel (bắt buộc):</label>
               <input type="file" id="feature-file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
               <span style="font-size: 12px; color: var(--text-muted);">Tối đa 4 MB trên Vercel, hỗ trợ tới 10.000 dòng.</span>
             </div>
 
             <div class="form-group">
-              <label for="labels-file">Tệp nhãn thật (tùy chọn để tính Accuracy & Confusion Matrix):</label>
+              <label for="labels-file">Tệp nhãn thật riêng (tùy chọn):</label>
               <input type="file" id="labels-file" accept=".txt,.csv,text/plain">
               <span style="font-size: 12px; color: var(--text-muted);">Tệp chứa danh sách nhãn dòng tương ứng (1..6 hoặc tên hoạt động).</span>
             </div>

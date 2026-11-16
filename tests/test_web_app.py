@@ -1,6 +1,7 @@
 import csv
 import io
 import unittest
+from pathlib import Path
 
 import numpy as np
 from openpyxl import Workbook
@@ -200,10 +201,12 @@ class WebAppTests(unittest.TestCase):
         with TestClient(app) as client:
             response = client.post(
                 "/api/predict",
-                files={"file": ("bad.csv", make_csv([[0.0] * 560]), "text/csv")},
+                files={"file": ("TotalAcceleration.csv", make_csv([[0.0] * 5]), "text/csv")},
             )
 
         self.assertEqual(response.status_code, 422)
+        self.assertIn("561", response.json()["detail"])
+        self.assertIn("TotalAcceleration.csv", response.json()["detail"])
 
     def test_sensor_inspection_previews_csv_and_allows_empty_annotation(self):
         with TestClient(app) as client:
@@ -246,6 +249,36 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertIn("dòng 3", response.json()["detail"])
+
+    def test_batch_prediction_compares_both_models_on_labeled_csv_and_xlsx(self):
+        sample_dir = Path(__file__).resolve().parents[1] / "sample_data"
+        with TestClient(app) as client:
+            for filename in (
+                "uci_har_60_rows_labeled.csv",
+                "uci_har_60_rows_labeled.xlsx",
+            ):
+                sample_path = sample_dir / filename
+                response = client.post(
+                    "/api/predict",
+                    files={"file": (filename, sample_path.read_bytes(), "application/octet-stream")},
+                    data={"model_type": "both"},
+                )
+                self.assertEqual(response.status_code, 200, response.text)
+                data = response.json()
+                self.assertEqual(data["rows"], 60)
+                self.assertTrue(data["has_ground_truth"])
+                self.assertIn("mlp_metrics", data)
+                self.assertIn("lr_metrics", data)
+
+    def test_sample_download_endpoint_serves_csv_and_excel(self):
+        with TestClient(app) as client:
+            for filename in (
+                "uci_har_60_rows_labeled.csv",
+                "uci_har_60_rows_labeled.xlsx",
+            ):
+                response = client.get(f"/sample-data/{filename}")
+                self.assertEqual(response.status_code, 200)
+                self.assertGreater(len(response.content), 0)
 
 
 if __name__ == "__main__":

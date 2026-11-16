@@ -372,7 +372,9 @@ def _parse_feature_rows(raw: List[List[str]], source: str):
     elif row_len != FEATURE_COUNT:
         raise ValueError(
             f"Mỗi dòng cần {FEATURE_COUNT} đặc trưng (hoặc {FEATURE_COUNT+1} nếu kèm nhãn); "
-            f"dòng đầu có {row_len} cột.")
+            f"dòng đầu có {row_len} cột. Tệp cảm biến thô như TotalAcceleration.csv "
+            "không thể đưa trực tiếp vào hai mô hình này; hãy dùng file mẫu 561 "
+            "đặc trưng bên dưới.")
 
     features = [_parse_row(r, i) for i, r in enumerate(data_rows, 1)]
     return np.asarray(features, dtype=np.float64), labels
@@ -391,6 +393,20 @@ def serve_output(filename: str):
     if not p.is_file():
         raise HTTPException(404)
     return FileResponse(p)
+
+
+@app.get("/sample-data/{filename}", include_in_schema=False)
+def serve_sample_data(filename: str):
+    allowed_files = {
+        "uci_har_60_rows_labeled.csv",
+        "uci_har_60_rows_labeled.xlsx",
+    }
+    if filename not in allowed_files:
+        raise HTTPException(404)
+    path = SAMPLE_DIR / filename
+    if not path.is_file():
+        raise HTTPException(404)
+    return FileResponse(path, filename=filename)
 
 
 @app.get("/api/health")
