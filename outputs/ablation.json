@@ -1,0 +1,21 @@
+{
+  "note": "Thực nghiệm bỏ chuẩn hóa StandardScaler trên validation tách theo người (GroupShuffleSplit, seed 42); không dùng tập test.",
+  "results": {
+    "lr_with_scaler": {
+      "accuracy": 0.9584,
+      "macro_f1": 0.9546
+    },
+    "lr_no_scaler": {
+      "accuracy": 0.9595,
+      "macro_f1": 0.9546
+    },
+    "mlp_with_scaler": {
+      "accuracy": 0.9639,
+      "macro_f1": 0.9606
+    },
+    "mlp_no_scaler": {
+      "accuracy": 0.9606,
+      "macro_f1": 0.956
+    }
+  }
+}

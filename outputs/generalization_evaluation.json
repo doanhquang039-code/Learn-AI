@@ -1,0 +1,73 @@
+{
+  "generated_at": "2026-11-25 15:27 UTC",
+  "dataset": "UCI HAR training split",
+  "protocol": "5-fold GroupKFold, grouped by participant; no participant appears in both training and validation within a fold. The official test split is not used in this cross-validation.",
+  "subject_count": 21,
+  "folds": [
+    {
+      "fold": 1,
+      "train_subject_count": 17,
+      "validation_subject_count": 4,
+      "lr_accuracy": 0.8817,
+      "lr_macro_f1": 0.871,
+      "mlp_accuracy": 0.8852,
+      "mlp_macro_f1": 0.875
+    },
+    {
+      "fold": 2,
+      "train_subject_count": 17,
+      "validation_subject_count": 4,
+      "lr_accuracy": 0.8986,
+      "lr_macro_f1": 0.9017,
+      "mlp_accuracy": 0.9077,
+      "mlp_macro_f1": 0.9082
+    },
+    {
+      "fold": 3,
+      "train_subject_count": 17,
+      "validation_subject_count": 4,
+      "lr_accuracy": 0.9795,
+      "lr_macro_f1": 0.9793,
+      "mlp_accuracy": 0.9746,
+      "mlp_macro_f1": 0.9742
+    },
+    {
+      "fold": 4,
+      "train_subject_count": 17,
+      "validation_subject_count": 4,
+      "lr_accuracy": 0.9709,
+      "lr_macro_f1": 0.9703,
+      "mlp_accuracy": 0.9716,
+      "mlp_macro_f1": 0.971
+    },
+    {
+      "fold": 5,
+      "train_subject_count": 16,
+      "validation_subject_count": 5,
+      "lr_accuracy": 0.943,
+      "lr_macro_f1": 0.9469,
+      "mlp_accuracy": 0.9258,
+      "mlp_macro_f1": 0.9329
+    }
+  ],
+  "summary": [
+    {
+      "key": "lr",
+      "model": "Logistic Regression",
+      "mean_accuracy": 0.9347,
+      "std_accuracy": 0.0433,
+      "mean_macro_f1": 0.9338,
+      "std_macro_f1": 0.0462
+    },
+    {
+      "key": "mlp",
+      "model": "MLP",
+      "mean_accuracy": 0.933,
+      "std_accuracy": 0.0394,
+      "mean_macro_f1": 0.9323,
+      "std_macro_f1": 0.0422
+    }
+  ],
+  "limitations": "This is validation on the UCI HAR training participants, not an external study with students or patients.",
+  "sklearn_version": "1.9.1"
+}

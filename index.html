@@ -169,7 +169,7 @@
       font-weight: 600;
       color: #334155;
     }
-    select, input[type="text"], textarea {
+    select, input[type="text"], input[type="number"], textarea {
       width: 100%;
       padding: 10px 14px;
       border: 1px solid var(--border-dark);
@@ -529,7 +529,8 @@
     <nav class="tabs-nav" role="tablist">
       <button class="tab-btn active" data-tab="tab-quick">⚡ Thử mẫu & Dán số</button>
       <button class="tab-btn" data-tab="tab-upload">📁 Tải dữ liệu CSV/Excel</button>
-      <button class="tab-btn" data-tab="tab-simulation">⏱️ Mô phỏng chuỗi 20 mẫu</button>
+      <button class="tab-btn" data-tab="tab-simulation">⏱️ Xem 20 mẫu minh họa</button>
+      <button class="tab-btn" data-tab="tab-research">🎓 Nghiên cứu & giờ học</button>
       <button class="tab-btn" data-tab="tab-model-results">📊 Kết quả mô hình (outputs)</button>
       <button class="tab-btn" data-tab="tab-limitations">ℹ️ Hạn chế & Nguồn dữ liệu</button>
     </nav>
@@ -799,13 +800,13 @@
     <!-- TAB 3: SEQUENCE REPLAY SIMULATION -->
     <section id="tab-simulation" class="tab-panel">
       <div class="card">
-        <h2 class="card-title">⏱️ Phát lại chuỗi mẫu kiểm thử (Mô phỏng chuỗi thời gian)</h2>
+        <h2 class="card-title">⏱️ Phát lại 20 mẫu kiểm thử minh họa</h2>
         <p class="card-desc">
-          Mô phỏng quá trình người dùng thay đổi hoạt động liên tục qua 20 cửa sổ dữ liệu kiểm thử thực tế. Quan sát cách mô hình MLP và LR nhận diện và chuyển đổi trạng thái mượt mà theo từng thời điểm!
+          Xem lần lượt 20 cửa sổ mẫu được chọn để phủ đủ sáu hoạt động. Quan sát nhãn thật, dự đoán và độ tin cậy của MLP và LR ở từng mẫu.
         </p>
 
         <div class="alert alert-warning">
-          <span>⚠️ <strong>Lưu ý quan trọng:</strong> Đây là mô phỏng tuần tự từ 20 mẫu kiểm thử đã thu thập trước trong tập test, không phải tín hiệu cảm biến truyền trực tiếp theo thời gian thực từ thiết bị sống.</span>
+          <span>⚠️ <strong>Lưu ý:</strong> Thứ tự này chỉ để xem mẫu; các dòng không phải chuỗi thời gian liên tục và không phải tín hiệu cảm biến trực tiếp.</span>
         </div>
 
         <div class="sim-controls">
@@ -858,7 +859,75 @@
       </div>
     </section>
 
-    <!-- TAB 4: MODEL RESULTS (FROM OUTPUTS DIRECTORY) -->
+    <!-- TAB 4: CROSS-SUBJECT RESEARCH AND EDUCATION PROTOTYPE -->
+    <section id="tab-research" class="tab-panel">
+      <div class="card">
+        <h2 class="card-title">🔬 Đánh giá tổng quát hóa theo người tham gia</h2>
+        <p class="card-desc">
+          Đánh giá 5-fold GroupKFold trên 21 người trong tập train UCI HAR. Mỗi fold giữ riêng người tham gia ở validation; kết quả này cho biết mô hình hoạt động ra sao trên những người không xuất hiện trong fold train.
+        </p>
+        <div class="alert alert-warning">
+          <span>
+            Đây là kiểm định trên dữ liệu UCI HAR công khai, <strong>không phải thử nghiệm với học sinh hoặc bệnh nhân</strong>.
+            Tập test chính thức vẫn được giữ riêng. Chạy <code>python generate_analysis.py</code> để tạo/cập nhật báo cáo.
+          </span>
+        </div>
+        <p id="generalization-status" role="status" style="color: var(--text-muted);">Đang tải kết quả đánh giá...</p>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr><th>Mô hình</th><th>Accuracy trung bình ± SD</th><th>Macro-F1 trung bình ± SD</th></tr>
+            </thead>
+            <tbody id="generalization-summary-tbody">
+              <tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Đang tải...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 style="margin:22px 0 10px;font-size:16px;">Kết quả từng fold</h3>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Fold</th><th>Người train</th><th>Người validation</th>
+                <th>LR Accuracy</th><th>LR Macro-F1</th><th>MLP Accuracy</th><th>MLP Macro-F1</th>
+              </tr>
+            </thead>
+            <tbody id="generalization-folds-tbody">
+              <tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Chưa có kết quả.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p id="generalization-protocol" style="font-size:13px;color:var(--text-muted);margin:12px 0 0;"></p>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">⏰ Prototype nhắc nghỉ vận động khi học</h2>
+        <p class="card-desc">
+          Bản minh họa can thiệp giáo dục: người học tự chọn khoảng học liên tục, ứng dụng nhắc nghỉ ngắn để đứng dậy/vận động nhẹ. Bộ đếm chạy ngay trên trình duyệt và không lưu thời gian hay dữ liệu cá nhân.
+        </p>
+        <div class="alert alert-info">
+          <span>
+            Đây là bộ đếm giờ do người dùng chủ động bật, <strong>chưa kết nối cảm biến hoặc dự đoán hoạt động</strong>.
+            Nhãn SITTING/STANDING từ mô hình không đủ để kết luận tình trạng sức khỏe hay mức độ chú ý.
+          </span>
+        </div>
+        <div class="form-grid" style="align-items:end;">
+          <div class="form-group">
+            <label for="study-break-minutes">Nhắc nghỉ sau (phút học liên tục):</label>
+            <input id="study-break-minutes" type="number" min="5" max="120" step="5" value="30">
+          </div>
+          <div class="btn-row" style="margin:0;">
+            <button type="button" id="btn-break-start" class="btn btn-primary">▶ Bắt đầu</button>
+            <button type="button" id="btn-break-pause" class="btn btn-secondary" disabled>⏸ Tạm dừng</button>
+            <button type="button" id="btn-break-reset" class="btn btn-secondary">🔄 Đặt lại</button>
+          </div>
+        </div>
+        <p id="study-break-clock" aria-live="polite" style="font-size:clamp(32px,6vw,48px);font-weight:750;color:var(--primary);margin:12px 0;">30:00</p>
+        <p id="study-break-status" role="status" style="font-weight:600;color:var(--text-muted);">Sẵn sàng. Bộ đếm chỉ chạy khi bạn bấm Bắt đầu.</p>
+      </div>
+    </section>
+
+    <!-- TAB 5: MODEL RESULTS (FROM OUTPUTS DIRECTORY) -->
     <section id="tab-model-results" class="tab-panel">
       <div class="card">
         <h2 class="card-title">📊 Kết quả đánh giá khoa học (Đọc trực tiếp từ thư mục outputs)</h2>
@@ -908,8 +977,8 @@
 
         <!-- 5 Seeds Stability Table -->
         <h3 style="margin: 24px 0 10px; font-size: 16px;">3. Đánh giá tính ổn định trên 5 Seeds ngẫu nhiên</h3>
-        <p style="font-size: 13px; color: var(--text-muted); margin-top: 0;">
-          Thực nghiệm qua 5 seed (Seed 42, 1, 7, 21, 99) chứng minh mô hình hoạt động ổn định và không bị phụ thuộc vào phân chia may rủi:
+        <p id="metrics-seed-protocol" style="font-size: 13px; color: var(--text-muted); margin-top: 0;">
+          Các seed dùng cùng một train/test split và chỉ thay đổi random_state; đây không phải đánh giá trên nhiều cách chia người tham gia.
         </p>
         <div class="table-container">
           <table>
@@ -956,7 +1025,7 @@
       </div>
     </section>
 
-    <!-- TAB 5: LIMITATIONS & DATA SOURCE -->
+    <!-- TAB 6: LIMITATIONS & DATA SOURCE -->
     <section id="tab-limitations" class="tab-panel">
       <div class="card">
         <h2 class="card-title">ℹ️ Hạn chế mô hình & Nguồn dữ liệu</h2>
@@ -996,6 +1065,9 @@
     let simTimer = null;
     let simCurrentIndex = 0;
     let latestBatchResults = null;
+    let studyBreakTimer = null;
+    let studyBreakDeadline = null;
+    let studyBreakRemainingMs = 30 * 60 * 1000;
 
     const CLASS_COLORS = {
       "WALKING": "#3b82f6",
@@ -1646,12 +1718,151 @@
       setSimulationStep(0);
     });
 
-    // ---------------- TAB 4: MODEL EVALUATION FROM OUTPUTS ----------------
+    // ---------------- TAB 4: RESEARCH AND EDUCATION PROTOTYPE ----------------
+    async function loadGeneralizationResults() {
+      const status = document.getElementById("generalization-status");
+      try {
+        const response = await fetch("/api/generalization-evaluation");
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || "Không tải được kết quả đánh giá.");
+        }
+
+        const summaryBody = document.getElementById("generalization-summary-tbody");
+        summaryBody.replaceChildren();
+        data.summary.forEach((item) => {
+          const row = document.createElement("tr");
+          [
+            item.model,
+            `${(item.mean_accuracy * 100).toFixed(2)}% ± ${(item.std_accuracy * 100).toFixed(2)}%`,
+            `${item.mean_macro_f1.toFixed(4)} ± ${item.std_macro_f1.toFixed(4)}`,
+          ].forEach((value) => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.appendChild(cell);
+          });
+          summaryBody.appendChild(row);
+        });
+
+        const foldsBody = document.getElementById("generalization-folds-tbody");
+        foldsBody.replaceChildren();
+        data.folds.forEach((fold) => {
+          const row = document.createElement("tr");
+          [
+            fold.fold,
+            fold.train_subject_count,
+            fold.validation_subject_count,
+            `${(fold.lr_accuracy * 100).toFixed(2)}%`,
+            fold.lr_macro_f1.toFixed(4),
+            `${(fold.mlp_accuracy * 100).toFixed(2)}%`,
+            fold.mlp_macro_f1.toFixed(4),
+          ].forEach((value) => {
+            const cell = document.createElement("td");
+            cell.textContent = String(value);
+            row.appendChild(cell);
+          });
+          foldsBody.appendChild(row);
+        });
+
+        document.getElementById("generalization-protocol").textContent =
+          `${data.protocol} Số người trong tập train: ${data.subject_count}. scikit-learn ${data.sklearn_version}. Báo cáo tạo lúc ${data.generated_at}.`;
+        status.textContent = data.limitations;
+      } catch (error) {
+        status.textContent = error.message;
+        const summaryBody = document.getElementById("generalization-summary-tbody");
+        summaryBody.replaceChildren();
+        const errorRow = document.createElement("tr");
+        const errorCell = document.createElement("td");
+        errorCell.colSpan = 3;
+        errorCell.textContent = error.message;
+        errorRow.appendChild(errorCell);
+        summaryBody.appendChild(errorRow);
+        document.getElementById("generalization-folds-tbody").replaceChildren();
+      }
+    }
+
+    function renderStudyBreakClock() {
+      const seconds = Math.max(0, Math.ceil(studyBreakRemainingMs / 1000));
+      const minutesText = String(Math.floor(seconds / 60)).padStart(2, "0");
+      const secondsText = String(seconds % 60).padStart(2, "0");
+      document.getElementById("study-break-clock").textContent =
+        `${minutesText}:${secondsText}`;
+    }
+
+    function resetStudyBreakTimer() {
+      if (studyBreakTimer) clearInterval(studyBreakTimer);
+      studyBreakTimer = null;
+      studyBreakDeadline = null;
+      const minutes = Number(document.getElementById("study-break-minutes").value);
+      if (!Number.isInteger(minutes) || minutes < 5 || minutes > 120 || minutes % 5 !== 0) {
+        document.getElementById("study-break-minutes").setCustomValidity(
+          "Chọn số phút từ 5 đến 120, theo bước 5 phút."
+        );
+        document.getElementById("study-break-status").textContent =
+          "Khoảng nghỉ không hợp lệ. Hãy chọn từ 5 đến 120 phút, theo bước 5 phút.";
+        document.getElementById("btn-break-start").disabled = true;
+        return;
+      }
+
+      document.getElementById("study-break-minutes").setCustomValidity("");
+      studyBreakRemainingMs = minutes * 60 * 1000;
+      renderStudyBreakClock();
+      document.getElementById("study-break-status").textContent =
+        "Sẵn sàng. Bộ đếm chỉ chạy khi bạn bấm Bắt đầu.";
+      document.getElementById("btn-break-start").disabled = false;
+      document.getElementById("btn-break-pause").disabled = true;
+    }
+
+    function tickStudyBreakTimer() {
+      studyBreakRemainingMs = Math.max(0, studyBreakDeadline - Date.now());
+      renderStudyBreakClock();
+      if (studyBreakRemainingMs === 0) {
+        clearInterval(studyBreakTimer);
+        studyBreakTimer = null;
+        studyBreakDeadline = null;
+        document.getElementById("btn-break-start").disabled = false;
+        document.getElementById("btn-break-pause").disabled = true;
+        document.getElementById("study-break-status").textContent =
+          "Đến giờ nghỉ ngắn! Bạn có thể đứng dậy, vươn vai hoặc đi lại nhẹ nhàng.";
+      }
+    }
+
+    document.getElementById("btn-break-start").addEventListener("click", () => {
+      if (studyBreakTimer) return;
+      if (studyBreakRemainingMs <= 0) resetStudyBreakTimer();
+      if (studyBreakRemainingMs <= 0) return;
+      studyBreakDeadline = Date.now() + studyBreakRemainingMs;
+      document.getElementById("btn-break-start").disabled = true;
+      document.getElementById("btn-break-pause").disabled = false;
+      document.getElementById("study-break-status").textContent =
+        "Bộ đếm đang chạy trên thiết bị này; không có dữ liệu nào được gửi lên máy chủ.";
+      studyBreakTimer = setInterval(tickStudyBreakTimer, 250);
+      tickStudyBreakTimer();
+    });
+
+    document.getElementById("btn-break-pause").addEventListener("click", () => {
+      if (!studyBreakTimer) return;
+      studyBreakRemainingMs = Math.max(0, studyBreakDeadline - Date.now());
+      clearInterval(studyBreakTimer);
+      studyBreakTimer = null;
+      studyBreakDeadline = null;
+      renderStudyBreakClock();
+      document.getElementById("btn-break-start").disabled = false;
+      document.getElementById("btn-break-pause").disabled = true;
+      document.getElementById("study-break-status").textContent = "Đã tạm dừng.";
+    });
+
+    document.getElementById("btn-break-reset").addEventListener("click", resetStudyBreakTimer);
+    document.getElementById("study-break-minutes").addEventListener("change", resetStudyBreakTimer);
+
+    // ---------------- TAB 5: MODEL EVALUATION FROM OUTPUTS ----------------
     async function loadModelResults() {
       try {
         const resp = await fetch("/api/model-results");
         if (!resp.ok) throw new Error("Chưa nạp được kết quả outputs.");
         const data = await resp.json();
+        document.getElementById("metrics-seed-protocol").textContent =
+          `${data.seed_protocol || "Các seed dùng cùng train/test split; random_state thay đổi."} scikit-learn ${data.sklearn_version}.`;
 
         // 1. Summary Table
         const sumTbody = document.getElementById("metrics-summary-tbody");
@@ -1725,7 +1936,9 @@
     window.addEventListener("DOMContentLoaded", () => {
       loadSamples();
       loadSequence();
+      loadGeneralizationResults();
       loadModelResults();
+      resetStudyBreakTimer();
     });
   </script>
 </body>

@@ -48,7 +48,7 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
 │   ├── uci_har_300_rows_labeled.{csv,xlsx}
 │   ├── uci_har_600_rows_labeled.{csv,xlsx}
 │   ├── uci_har_test_samples.zip     # Gói CSV/Excel các cỡ mẫu để tải một lần
-│   ├── real_20_sequence.csv
+│   ├── real_20_sequence.csv         # 20 mẫu gần cân bằng, đủ 6 hoạt động; không phải chuỗi thời gian
 │   ├── real_20_sequence.json
 │   ├── sensor_samples/             # 6 cửa sổ gia tốc mẫu từ UCI HAR, mỗi lớp một CSV
 │   │   ├── WALKING/TotalAcceleration.csv
@@ -65,7 +65,8 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
 │   ├── cm_MLP.png
 │   ├── lr_har.joblib
 │   ├── mlp_har.joblib
-│   └── model_metrics.json        # Accuracy, Macro-F1, F1 từng lớp, bảng 5 seed
+│   ├── model_metrics.json        # Test metrics và kết quả seed được chạy thực tế
+│   └── generalization_evaluation.json # GroupKFold 5 fold, tách theo người
 └── tests/
     └── test_web_app.py           # Kiểm thử parser và API
 ```
@@ -94,10 +95,14 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
    - Tải tối đa 6 CSV thuộc các loại Accelerometer, AccelerometerUncalibrated, Annotation, Metadata, Orientation và TotalAcceleration để xem số dòng, tên cột và 8 dòng dữ liệu đầu tiên.
    - Đây là chức năng kiểm tra/xem trước; không dự đoán hoạt động từ dữ liệu cảm biến thô.
    - Có 6 CSV mẫu TotalAcceleration, mỗi file là một cửa sổ 128 mẫu (2,56 giây) thuộc một lớp, trích từ tập test UCI HAR; nguồn và giấy phép được ghi tại mục 2.
-8. **Mô phỏng chuỗi 20 mẫu (Sequence Replay):**
-   - Phát lại 20 cửa sổ dữ liệu kiểm thử liên tiếp theo thời gian thực (1 giây/bước) để quan sát chuyển đổi trạng thái hoạt động.
-   - Có thông báo lưu ý rõ ràng: *Mô phỏng từ dữ liệu kiểm thử ghi trước, không phải cảm biến thời gian thực sống.*
-9. **Trang Hạn chế & Nguồn dữ liệu:**
+8. **Xem lần lượt 20 mẫu kiểm thử minh họa:**
+   - Chọn hoặc phát lần lượt 20 mẫu gần cân bằng để quan sát dự đoán của hai mô hình trên đủ sáu hoạt động.
+   - Thứ tự mẫu chỉ để minh họa, không đại diện chuỗi thời gian liên tục hay cảm biến trực tiếp.
+9. **Đánh giá tổng quát hóa & prototype giáo dục:**
+   - Chạy 5-fold GroupKFold trên tập train, giữ các subject validation tách biệt khỏi subject train; báo cáo Accuracy/Macro-F1 từng fold và trung bình ± độ lệch chuẩn.
+   - Bảng đánh giá này dùng người tham gia của UCI HAR, không phải đánh giá bên ngoài trên học sinh hoặc bệnh nhân; tập test chính thức vẫn được giữ riêng.
+   - Bộ đếm nhắc nghỉ học tập là prototype tự bật/tắt trên trình duyệt, không kết nối cảm biến, không lưu dữ liệu và không suy đoán sức khỏe/chú ý.
+10. **Trang Hạn chế & Nguồn dữ liệu:**
    - Giấy phép CC BY 4.0, trích dẫn khoa học chính thức, quy trình trích xuất đặc trưng và các giới hạn thực tế của bài toán.
 
 ## 6. Hướng dẫn chạy
@@ -117,6 +122,14 @@ Tài liệu API Swagger tại: `http://127.0.0.1:8000/docs`
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+### Cập nhật báo cáo nghiên cứu
+
+```bash
+python generate_analysis.py
+```
+
+Lệnh này tạo `outputs/generalization_evaluation.json` từ 5-fold GroupKFold theo người tham gia, tính lại bảng 5 seed bằng các lần huấn luyện thực tế và chạy ablation chỉ trên validation (không dùng tập test để chọn biến thể). Toàn bộ có thể mất vài phút tùy cấu hình máy.
 
 ### Chạy trên Google Colab
 

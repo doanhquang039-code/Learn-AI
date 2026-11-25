@@ -1,13 +1,17 @@
 import csv
 import io
+import json
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 from openpyxl import Workbook
 from fastapi.testclient import TestClient
 
+from generate_analysis import save_generalization_evaluation
 from web_app import (
     app,
     get_model_bundle,
@@ -190,6 +194,44 @@ class WebAppTests(unittest.TestCase):
             self.assertIn("seed_results", data)
             self.assertIn("images", data)
 
+    def test_generalization_evaluation_endpoint(self):
+        payload = {
+            "summary": [],
+            "folds": [],
+            "protocol": "Grouped by participant.",
+        }
+        with patch("web_app.load_json", return_value=payload):
+            with TestClient(app) as client:
+                response = client.get("/api/generalization-evaluation")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), payload)
+
+        with patch("web_app.load_json", return_value=None):
+            with TestClient(app) as client:
+                response = client.get("/api/generalization-evaluation")
+        self.assertEqual(response.status_code, 404)
+
+    def test_generalization_evaluation_creates_five_grouped_folds(self):
+        rng = np.random.default_rng(42)
+        features = rng.normal(size=(30, 561))
+        groups = np.repeat(np.arange(15), 2)
+        labels = np.asarray([
+            class_id
+            for subject_id in range(15)
+            for class_id in (subject_id % 6, (subject_id + 1) % 6)
+        ])
+
+        with tempfile.TemporaryDirectory() as output_dir:
+            with patch("generate_analysis.OUTPUTS", Path(output_dir)):
+                save_generalization_evaluation(features, labels, groups)
+            report_path = Path(output_dir) / "generalization_evaluation.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(report["subject_count"], 15)
+        self.assertEqual(len(report["folds"]), 5)
+        self.assertEqual(len(report["summary"]), 2)
+        self.assertTrue(all(fold["validation_subject_count"] == 3 for fold in report["folds"]))
+
     def test_sequence_endpoint(self):
         with TestClient(app) as client:
             resp = client.get("/api/sequence")
@@ -197,6 +239,14 @@ class WebAppTests(unittest.TestCase):
             data = resp.json()
             self.assertIn("steps", data)
             self.assertEqual(len(data["steps"]), 20)
+            self.assertEqual(
+                {step["true_label"] for step in data["steps"]},
+                {
+                    "WALKING", "WALKING_UPSTAIRS", "WALKING_DOWNSTAIRS",
+                    "SITTING", "STANDING", "LAYING",
+                },
+            )
+            self.assertIn("không phải chuỗi thời gian", data["disclaimer"])
 
     def test_api_rejects_csv_with_wrong_feature_count(self):
         with TestClient(app) as client:

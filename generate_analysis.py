@@ -8,7 +8,7 @@ Yêu cầu: har.zip phải nằm sẵn trong D:/AI-Realtime/ hoặc
 Chạy:
     python generate_analysis.py
 """
-import io, itertools, json, os, zipfile
+import csv, io, itertools, json, os, zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +18,7 @@ import sklearn
 
 ROOT = Path(__file__).resolve().parent
 OUTPUTS = ROOT / "outputs"
+SAMPLE_DIR = ROOT / "sample_data"
 OUTPUTS.mkdir(exist_ok=True)
 
 SEED = 42
@@ -57,6 +58,41 @@ def save_xtest(X_test, y_test, s_test):
                         y=y_test.astype(np.int8),
                         s=s_test.astype(np.int8))
     print(f"  Saved X_test.npz  shape={X_test.shape}")
+
+
+def save_sequence_demo(X_test, y_test):
+    SAMPLE_DIR.mkdir(exist_ok=True)
+    class_counts = {0: 4, 1: 3, 2: 3, 3: 3, 4: 3, 5: 4}
+    rng = np.random.default_rng(SEED)
+    selected_indices = []
+    for class_id, count in class_counts.items():
+        candidates = np.flatnonzero(y_test == class_id)
+        if len(candidates) < count:
+            raise ValueError(f"Tập test không đủ mẫu cho lớp {CLASS_NAMES[class_id]}.")
+        selected_indices.extend(
+            rng.choice(candidates, size=count, replace=False).tolist()
+        )
+    rng.shuffle(selected_indices)
+
+    samples = [
+        {
+            "step": step,
+            "true_label": CLASS_NAMES[int(y_test[index])],
+            "features": [round(float(value), 8) for value in X_test[index]],
+        }
+        for step, index in enumerate(selected_indices, start=1)
+    ]
+    with open(SAMPLE_DIR / "real_20_sequence.json", "w", encoding="utf-8") as f:
+        json.dump(samples, f, ensure_ascii=False)
+
+    with open(
+        SAMPLE_DIR / "real_20_sequence.csv", "w", encoding="utf-8", newline="",
+    ) as f:
+        writer = csv.writer(f)
+        writer.writerow(["true_label"] + [f"feature_{i}" for i in range(FEATURE_COUNT)])
+        for sample in samples:
+            writer.writerow([sample["true_label"], *sample["features"]])
+    print("  Saved 20 near-balanced demo samples (not a chronological recording).")
 
 
 # ────────────────────────── predictions table ─────────────────────────────────
@@ -141,6 +177,97 @@ def save_subject_analysis(rows, s_test, y_test):
     print(f"  Saved subject_analysis.json  n_subjects={len(subjects)}")
 
 
+# ─────────────────── subject-independent generalization ───────────────────────
+def save_generalization_evaluation(X_train, y_train, s_train):
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import accuracy_score, f1_score
+    from sklearn.model_selection import GroupKFold
+    from sklearn.neural_network import MLPClassifier
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    model_specs = [
+        ("lr", "Logistic Regression", lambda: LogisticRegression(
+            C=1.0, max_iter=2000, random_state=SEED,
+        )),
+        ("mlp", "MLP", lambda: MLPClassifier(
+            hidden_layer_sizes=(128,), alpha=0.01,
+            learning_rate_init=1e-3, max_iter=300,
+            random_state=SEED,
+        )),
+    ]
+    folds = []
+    splitter = GroupKFold(n_splits=5)
+
+    for fold_number, (train_idx, validation_idx) in enumerate(
+        splitter.split(X_train, y_train, groups=s_train), start=1,
+    ):
+        train_subjects = np.unique(s_train[train_idx])
+        validation_subjects = np.unique(s_train[validation_idx])
+        if np.intersect1d(train_subjects, validation_subjects).size:
+            raise ValueError("GroupKFold tạo giao nhau giữa subject train và validation.")
+
+        fold = {
+            "fold": fold_number,
+            "train_subject_count": int(len(train_subjects)),
+            "validation_subject_count": int(len(validation_subjects)),
+        }
+        for key, _, make_classifier in model_specs:
+            model = make_pipeline(StandardScaler(), make_classifier())
+            model.fit(X_train[train_idx], y_train[train_idx])
+            predictions = model.predict(X_train[validation_idx])
+            fold[f"{key}_accuracy"] = round(
+                float(accuracy_score(y_train[validation_idx], predictions)), 4,
+            )
+            fold[f"{key}_macro_f1"] = round(
+                float(f1_score(
+                    y_train[validation_idx], predictions,
+                    labels=np.arange(len(CLASS_NAMES)), average="macro",
+                    zero_division=0,
+                )), 4,
+            )
+        folds.append(fold)
+        print(
+            f"  Generalization fold {fold_number}/5: "
+            f"train_subjects={len(train_subjects)} "
+            f"validation_subjects={len(validation_subjects)}"
+        )
+
+    summaries = []
+    for key, name, _ in model_specs:
+        accuracies = np.asarray([fold[f"{key}_accuracy"] for fold in folds])
+        macro_f1s = np.asarray([fold[f"{key}_macro_f1"] for fold in folds])
+        summaries.append({
+            "key": key,
+            "model": name,
+            "mean_accuracy": round(float(np.mean(accuracies)), 4),
+            "std_accuracy": round(float(np.std(accuracies, ddof=1)), 4),
+            "mean_macro_f1": round(float(np.mean(macro_f1s)), 4),
+            "std_macro_f1": round(float(np.std(macro_f1s, ddof=1)), 4),
+        })
+
+    data = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "sklearn_version": sklearn.__version__,
+        "dataset": "UCI HAR training split",
+        "protocol": (
+            "5-fold GroupKFold, grouped by participant; no participant appears "
+            "in both training and validation within a fold. The official test "
+            "split is not used in this cross-validation."
+        ),
+        "subject_count": int(len(np.unique(s_train))),
+        "folds": folds,
+        "summary": summaries,
+        "limitations": (
+            "This is validation on the UCI HAR training participants, not an "
+            "external study with students or patients."
+        ),
+    }
+    with open(OUTPUTS / "generalization_evaluation.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    print("  Saved generalization_evaluation.json")
+
+
 # ─────────────────────── hyperparameter search ───────────────────────────────
 def save_hyperparams(X_train, y_train, s_train):
     from sklearn.linear_model import LogisticRegression
@@ -198,50 +325,62 @@ def save_hyperparams(X_train, y_train, s_train):
 
 
 # ─────────────────────────── ablation study ──────────────────────────────────
-def save_ablation(X_train, y_train, X_test, y_test):
+def save_ablation(X_train, y_train, s_train):
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import accuracy_score, f1_score
+    from sklearn.model_selection import GroupShuffleSplit
     from sklearn.neural_network import MLPClassifier
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
 
+    splitter = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=SEED)
+    train_idx, validation_idx = next(
+        splitter.split(X_train, y_train, groups=s_train)
+    )
+    Xtr, ytr = X_train[train_idx], y_train[train_idx]
+    Xva, yva = X_train[validation_idx], y_train[validation_idx]
     results = {}
 
-    # With scaler (baseline — already computed but rerun for consistency)
     for name, clf in [
         ("lr",  LogisticRegression(C=1.0, max_iter=2000, random_state=SEED)),
         ("mlp", MLPClassifier(hidden_layer_sizes=(128,), alpha=0.01,
                               learning_rate_init=1e-3, max_iter=300, random_state=SEED)),
     ]:
         m = make_pipeline(StandardScaler(), clf.__class__(**clf.get_params()))
-        m.fit(X_train, y_train)
-        pred = m.predict(X_test)
+        m.fit(Xtr, ytr)
+        pred = m.predict(Xva)
         results[f"{name}_with_scaler"] = {
-            "accuracy": round(accuracy_score(y_test, pred), 4),
-            "macro_f1": round(f1_score(y_test, pred, average="macro"), 4),
+            "accuracy": round(accuracy_score(yva, pred), 4),
+            "macro_f1": round(f1_score(yva, pred, average="macro"), 4),
         }
 
-        # Without scaler
         m2 = clf.__class__(**clf.get_params())
-        m2.fit(X_train, y_train)
-        pred2 = m2.predict(X_test)
+        m2.fit(Xtr, ytr)
+        pred2 = m2.predict(Xva)
         results[f"{name}_no_scaler"] = {
-            "accuracy": round(accuracy_score(y_test, pred2), 4),
-            "macro_f1": round(f1_score(y_test, pred2, average="macro"), 4),
+            "accuracy": round(accuracy_score(yva, pred2), 4),
+            "macro_f1": round(f1_score(yva, pred2, average="macro"), 4),
         }
         print(f"  {name} with_scaler={results[f'{name}_with_scaler']} no_scaler={results[f'{name}_no_scaler']}")
 
     with open(OUTPUTS / "ablation.json", "w", encoding="utf-8") as f:
         json.dump({
-            "note": "Thực nghiệm bỏ chuẩn hóa StandardScaler; cùng seed 42, cùng tập test",
+            "note": (
+                "Thực nghiệm bỏ chuẩn hóa StandardScaler trên validation tách "
+                "theo người (GroupShuffleSplit, seed 42); không dùng tập test."
+            ),
             "results": results,
         }, f, ensure_ascii=False, indent=2)
     print("  Saved ablation.json")
 
 
 # ─────────────────────── update model_metrics.json ───────────────────────────
-def update_metrics(X_test, y_test, mlp, lr):
+def update_metrics(X_train, y_train, X_test, y_test, mlp, lr):
     from sklearn.metrics import accuracy_score, classification_report, f1_score
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.neural_network import MLPClassifier
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
 
     class_f1 = []
     summary  = []
@@ -274,13 +413,36 @@ def update_metrics(X_test, y_test, mlp, lr):
                 existing[f"{key}_recall"]    = round(rep[c]["recall"],    4)
                 existing[f"{key}_f1"]        = round(rep[c]["f1-score"],  4)
 
-    seed_results = [
-        {"seed": 42, "lr_acc": 0.9498, "lr_macro_f1": 0.9500, "mlp_acc": 0.9477, "mlp_macro_f1": 0.9480},
-        {"seed":  1, "lr_acc": 0.9501, "lr_macro_f1": 0.9503, "mlp_acc": 0.9484, "mlp_macro_f1": 0.9487},
-        {"seed":  7, "lr_acc": 0.9491, "lr_macro_f1": 0.9494, "mlp_acc": 0.9450, "mlp_macro_f1": 0.9453},
-        {"seed": 21, "lr_acc": 0.9515, "lr_macro_f1": 0.9516, "mlp_acc": 0.9491, "mlp_macro_f1": 0.9495},
-        {"seed": 99, "lr_acc": 0.9488, "lr_macro_f1": 0.9489, "mlp_acc": 0.9464, "mlp_macro_f1": 0.9468},
-    ]
+    seed_results = []
+    for seed in (42, 1, 7, 21, 99):
+        seed_lr = make_pipeline(
+            StandardScaler(),
+            LogisticRegression(C=1.0, max_iter=2000, random_state=seed),
+        )
+        seed_mlp = make_pipeline(
+            StandardScaler(),
+            MLPClassifier(
+                hidden_layer_sizes=(128,), alpha=0.01,
+                learning_rate_init=1e-3, max_iter=300, random_state=seed,
+            ),
+        )
+        seed_lr.fit(X_train, y_train)
+        seed_mlp.fit(X_train, y_train)
+        lr_pred = seed_lr.predict(X_test)
+        mlp_pred = seed_mlp.predict(X_test)
+        seed_results.append({
+            "seed": seed,
+            "lr_acc": round(float(accuracy_score(y_test, lr_pred)), 4),
+            "lr_macro_f1": round(float(f1_score(
+                y_test, lr_pred, labels=np.arange(len(CLASS_NAMES)),
+                average="macro", zero_division=0,
+            )), 4),
+            "mlp_acc": round(float(accuracy_score(y_test, mlp_pred)), 4),
+            "mlp_macro_f1": round(float(f1_score(
+                y_test, mlp_pred, labels=np.arange(len(CLASS_NAMES)),
+                average="macro", zero_division=0,
+            )), 4),
+        })
 
     data = {
         "generated_at":    datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
@@ -289,6 +451,11 @@ def update_metrics(X_test, y_test, mlp, lr):
         "summary":         summary,
         "class_f1":        class_f1,
         "seed_results":    seed_results,
+        "seed_protocol": (
+            "Five actual model fits with different estimator seeds; same official "
+            "train/test partition and fixed hyperparameters. These runs measure "
+            "seed sensitivity, not variation across participant splits."
+        ),
         "seed_stats": {
             "lr_mean_acc":  round(np.mean([r["lr_acc"]      for r in seed_results]), 4),
             "lr_std_acc":   round(np.std( [r["lr_acc"]      for r in seed_results]), 4),
@@ -333,6 +500,8 @@ if __name__ == "__main__":
 
     print("Saving X_test.npz...")
     save_xtest(X_test, y_test, s_test)
+    print("Creating a balanced 20-sample demo set...")
+    save_sequence_demo(X_test, y_test)
 
     print("Computing predictions on full test set...")
     rows = save_predictions(X_test, y_test, s_test, mlp, lr)
@@ -343,17 +512,20 @@ if __name__ == "__main__":
     print("Saving subject-level analysis...")
     save_subject_analysis(rows, s_test, y_test)
 
-    print("Running hyperparameter grid search (this takes ~2 min)...")
+    print("Running hyperparameter search (this may take several minutes)...")
     save_hyperparams(X_train, y_train, s_train)
 
-    print("Running ablation study (no StandardScaler)...")
-    save_ablation(X_train, y_train, X_test, y_test)
+    print("Evaluating generalization across held-out participants...")
+    save_generalization_evaluation(X_train, y_train, s_train)
 
-    print("Updating model_metrics.json with exact numbers + metadata...")
-    update_metrics(X_test, y_test, mlp, lr)
+    print("Running validation-only ablation study (no StandardScaler)...")
+    save_ablation(X_train, y_train, s_train)
 
-    print("\n✅ Tất cả file JSON đã được sinh thành công trong outputs/")
-    print("   Danh sách:")
+    print("Updating model_metrics.json with measured numbers + metadata...")
+    update_metrics(X_train, y_train, X_test, y_test, mlp, lr)
+
+    print("\nAll generated report files are available in outputs/.")
+    print("Generated files:")
     for f in sorted(OUTPUTS.glob("*.json")):
         size_kb = f.stat().st_size / 1024
         print(f"   {f.name:40s} {size_kb:7.1f} KB")

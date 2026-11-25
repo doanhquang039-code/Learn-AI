@@ -485,6 +485,17 @@ def model_results():
     return data
 
 
+@app.get("/api/generalization-evaluation")
+def generalization_evaluation():
+    data = load_json(OUTPUTS / "generalization_evaluation.json")
+    if not data:
+        raise HTTPException(
+            404,
+            "Chưa có đánh giá tổng quát hóa. Hãy chạy generate_analysis.py.",
+        )
+    return data
+
+
 @app.get("/api/samples")
 def get_samples():
     for p in [SAMPLE_DIR / "real_12_rows.csv", APP_DIR / "real_12_rows.csv"]:
@@ -528,7 +539,10 @@ def get_sequence():
             "lr":  lr_res[i]  if lr_res  else None,
         })
     return {
-        "disclaimer": "⚠️ Đây là mô phỏng tuần tự từ 20 mẫu kiểm thử đã thu thập trước, không phải tín hiệu cảm biến thời gian thực.",
+        "disclaimer": (
+            "Đây là 20 mẫu minh họa được chọn từ tập test để bao gồm đủ sáu hoạt động. "
+            "Thứ tự mẫu không phải chuỗi thời gian và không phải cảm biến thời gian thực."
+        ),
         "steps": steps,
     }
 

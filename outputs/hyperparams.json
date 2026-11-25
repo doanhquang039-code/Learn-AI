@@ -1,0 +1,60 @@
+{
+  "note": "Validation tách theo người (GroupShuffleSplit, seed 42), Macro-F1 trên tập val",
+  "lr_results": [
+    {
+      "C": 0.01,
+      "val_macro_f1": 0.9494,
+      "selected": false
+    },
+    {
+      "C": 0.1,
+      "val_macro_f1": 0.9573,
+      "selected": true
+    },
+    {
+      "C": 1,
+      "val_macro_f1": 0.9546,
+      "selected": false
+    },
+    {
+      "C": 10,
+      "val_macro_f1": 0.9441,
+      "selected": false
+    }
+  ],
+  "mlp_results": [
+    {
+      "hidden": "(128,)",
+      "alpha": 0.0001,
+      "lr_init": 0.001,
+      "val_macro_f1": 0.9637,
+      "selected": true
+    },
+    {
+      "hidden": "(128,)",
+      "alpha": 0.01,
+      "lr_init": 0.001,
+      "val_macro_f1": 0.9606,
+      "selected": false
+    },
+    {
+      "hidden": "(128, 64)",
+      "alpha": 0.0001,
+      "lr_init": 0.001,
+      "val_macro_f1": 0.9537,
+      "selected": false
+    },
+    {
+      "hidden": "(128, 64)",
+      "alpha": 0.01,
+      "lr_init": 0.001,
+      "val_macro_f1": 0.9547,
+      "selected": false
+    }
+  ],
+  "best_lr_C": 0.1,
+  "best_mlp": {
+    "hidden": "(128,)",
+    "alpha": 0.0001
+  }
+}
