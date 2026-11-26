@@ -101,7 +101,10 @@ Phân loại 6 hoạt động (`WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIR
 9. **Đánh giá tổng quát hóa & prototype giáo dục:**
    - Chạy 5-fold GroupKFold trên tập train, giữ các subject validation tách biệt khỏi subject train; báo cáo Accuracy/Macro-F1 từng fold và trung bình ± độ lệch chuẩn.
    - Bảng đánh giá này dùng người tham gia của UCI HAR, không phải đánh giá bên ngoài trên học sinh hoặc bệnh nhân; tập test chính thức vẫn được giữ riêng.
-   - Bộ đếm nhắc nghỉ học tập là prototype tự bật/tắt trên trình duyệt, không kết nối cảm biến, không lưu dữ liệu và không suy đoán sức khỏe/chú ý.
+   - Prototype thu cảm biến dùng DeviceMotion trên trình duyệt điện thoại để ghi nhãn hoạt động cùng gia tốc và tốc độ quay; người nghiên cứu xác nhận đã có đồng ý, chọn vị trí đặt máy và tải CSV trực tiếp về thiết bị. Tín hiệu chỉ giữ trong bộ nhớ trình duyệt, không tải lên server.
+   - Có thể chọn nhiều CSV lượt thu để kiểm tra cục bộ schema, nhãn nhất quán, thời gian, tần số lấy mẫu, khoảng mất mẫu và độ phủ gyroscope; file được xử lý trong trình duyệt, không gửi lên server.
+   - CSV thu được là dữ liệu thô, tần số lấy mẫu phụ thuộc thiết bị; chưa thể đưa thẳng vào model 561 đặc trưng UCI HAR. Cần bước chuẩn hóa/đặc trưng hóa và kiểm định riêng trước khi dùng cho dự đoán.
+   - Bộ đếm nhắc nghỉ học tập là prototype tự bật/tắt trên trình duyệt, không dùng dữ liệu cảm biến và không suy đoán sức khỏe/chú ý.
 10. **Trang Hạn chế & Nguồn dữ liệu:**
    - Giấy phép CC BY 4.0, trích dẫn khoa học chính thức, quy trình trích xuất đặc trưng và các giới hạn thực tế của bài toán.
 

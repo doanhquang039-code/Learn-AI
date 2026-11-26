@@ -901,6 +901,95 @@
       </div>
 
       <div class="card">
+        <h2 class="card-title">📱 Thu thử tín hiệu cảm biến điện thoại</h2>
+        <p class="card-desc">
+          Ghi một lượt dữ liệu thô cho một hoạt động, gắn nhãn ngay lúc bắt đầu và tải CSV về máy để phục vụ nghiên cứu thử nghiệm.
+        </p>
+        <div class="alert alert-warning">
+          <span>
+            <strong>Prototype thu thập, chưa phải dự đoán:</strong> cần mở trang bằng HTTPS trên điện thoại; cảm biến có thể yêu cầu cấp quyền.
+            Dữ liệu chỉ giữ trong bộ nhớ trình duyệt và không được gửi lên server. CSV này là tín hiệu thô có tần số lấy mẫu thay đổi,
+            <strong>không tương thích trực tiếp với model 561 đặc trưng</strong>. Chỉ thu khi người tham gia đã tự nguyện đồng ý; không ghi tên, chẩn đoán hay thông tin sức khỏe.
+          </span>
+        </div>
+        <form id="sensor-capture-form">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="capture-participant-code">Mã người tham gia (ẩn danh):</label>
+              <input id="capture-participant-code" type="text" maxlength="32" autocomplete="off" placeholder="Ví dụ: P001">
+            </div>
+            <div class="form-group">
+              <label for="capture-activity">Hoạt động đang ghi:</label>
+              <select id="capture-activity" required>
+                <option value="WALKING">Đi bộ (WALKING)</option>
+                <option value="WALKING_UPSTAIRS">Đi lên cầu thang (WALKING_UPSTAIRS)</option>
+                <option value="WALKING_DOWNSTAIRS">Đi xuống cầu thang (WALKING_DOWNSTAIRS)</option>
+                <option value="SITTING">Ngồi (SITTING)</option>
+                <option value="STANDING">Đứng (STANDING)</option>
+                <option value="LAYING">Nằm (LAYING)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="capture-placement">Vị trí điện thoại:</label>
+              <select id="capture-placement" required>
+                <option value="waist">Thắt lưng</option>
+                <option value="pocket">Túi quần</option>
+                <option value="hand">Cầm tay</option>
+                <option value="wrist">Cổ tay/đeo tay</option>
+                <option value="other">Khác</option>
+              </select>
+            </div>
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:8px;margin:12px 0;">
+            <input id="capture-consent" type="checkbox" required style="margin-top:4px;">
+            <span>Tôi đã thông báo mục đích thu thập và được người tham gia tự nguyện đồng ý; không nhập thông tin nhận dạng cá nhân.</span>
+          </label>
+          <div class="btn-row">
+            <button type="submit" id="btn-capture-start" class="btn btn-primary">⏺ Bắt đầu ghi lượt này</button>
+            <button type="button" id="btn-capture-stop" class="btn btn-secondary" disabled>⏹ Dừng ghi</button>
+            <button type="button" id="btn-capture-download" class="btn btn-secondary" disabled>⬇ Tải CSV lượt ghi</button>
+          </div>
+        </form>
+        <p id="capture-status" role="status" aria-live="polite" style="font-weight:600;color:var(--text-muted);">
+          Chưa ghi dữ liệu. Trên iPhone/iPad có thể cần cấp quyền chuyển động khi bắt đầu.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">🧾 Kiểm tra các lượt CSV đã thu</h2>
+        <p class="card-desc">
+          Chọn các CSV vừa tải về để kiểm tra cấu trúc, nhãn, thời lượng và tần số lấy mẫu trước khi đưa vào phân tích nghiên cứu.
+        </p>
+        <div class="alert alert-info">
+          <span>
+            Tệp được đọc và kiểm tra ngay trong trình duyệt, không gửi lên server và không lưu lại sau khi đóng trang.
+            Kiểm tra đạt <strong>không có nghĩa là dữ liệu đã tương thích với model UCI HAR</strong>; tần số và cách đặt điện thoại có thể khác dữ liệu gốc.
+          </span>
+        </div>
+        <div class="form-group">
+          <label for="capture-review-files">CSV các lượt thu (tối đa 12 file):</label>
+          <input id="capture-review-files" type="file" accept=".csv,text/csv" multiple>
+        </div>
+        <p id="capture-review-status" role="status" aria-live="polite" style="color:var(--text-muted);">
+          Chưa chọn file.
+        </p>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Tệp</th><th>Hoạt động</th><th>Mã người</th><th>Vị trí</th>
+                <th>Mẫu</th><th>Thời lượng</th><th>Tần số ước tính</th>
+                <th>Gyroscope</th><th>Kiểm tra</th>
+              </tr>
+            </thead>
+            <tbody id="capture-review-tbody">
+              <tr><td colspan="9" style="text-align:center;color:var(--text-muted);">Chọn file CSV để kiểm tra cục bộ.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
         <h2 class="card-title">⏰ Prototype nhắc nghỉ vận động khi học</h2>
         <p class="card-desc">
           Bản minh họa can thiệp giáo dục: người học tự chọn khoảng học liên tục, ứng dụng nhắc nghỉ ngắn để đứng dậy/vận động nhẹ. Bộ đếm chạy ngay trên trình duyệt và không lưu thời gian hay dữ liệu cá nhân.
@@ -1068,6 +1157,12 @@
     let studyBreakTimer = null;
     let studyBreakDeadline = null;
     let studyBreakRemainingMs = 30 * 60 * 1000;
+    let sensorCaptureActive = false;
+    let sensorCaptureStartTime = 0;
+    let sensorCaptureSamples = [];
+    let sensorCaptureMetadata = null;
+    let sensorCaptureDownloaded = true;
+    const MAX_CAPTURE_SAMPLES = 100000;
 
     const CLASS_COLORS = {
       "WALKING": "#3b82f6",
@@ -1719,6 +1814,391 @@
     });
 
     // ---------------- TAB 4: RESEARCH AND EDUCATION PROTOTYPE ----------------
+    const sensorCaptureForm = document.getElementById("sensor-capture-form");
+    const sensorCaptureStatus = document.getElementById("capture-status");
+    const sensorCaptureStartButton = document.getElementById("btn-capture-start");
+    const sensorCaptureStopButton = document.getElementById("btn-capture-stop");
+    const sensorCaptureDownloadButton = document.getElementById("btn-capture-download");
+
+    function stopSensorCapture(message) {
+      if (!sensorCaptureActive) return;
+      sensorCaptureActive = false;
+      window.removeEventListener("devicemotion", handleDeviceMotion);
+      sensorCaptureStartButton.disabled = sensorCaptureSamples.length > 0 && !sensorCaptureDownloaded;
+      sensorCaptureStopButton.disabled = true;
+      sensorCaptureDownloadButton.disabled = sensorCaptureSamples.length === 0;
+      if (message) sensorCaptureStatus.textContent = message;
+    }
+
+    function handleDeviceMotion(event) {
+      const acceleration = event.accelerationIncludingGravity;
+      if (!acceleration || ![acceleration.x, acceleration.y, acceleration.z].every(Number.isFinite)) {
+        return;
+      }
+
+      const rotation = event.rotationRate || {};
+      const startedAt = Number.isFinite(event.timeStamp) ? event.timeStamp : performance.now();
+      const elapsedSeconds = Math.max(0, (startedAt - sensorCaptureStartTime) / 1000);
+      sensorCaptureSamples.push([
+        sensorCaptureSamples.length,
+        elapsedSeconds.toFixed(4),
+        acceleration.x,
+        acceleration.y,
+        acceleration.z,
+        Number.isFinite(rotation.alpha) ? rotation.alpha : "",
+        Number.isFinite(rotation.beta) ? rotation.beta : "",
+        Number.isFinite(rotation.gamma) ? rotation.gamma : "",
+      ]);
+
+      sensorCaptureStatus.textContent =
+        `Đang ghi ${sensorCaptureMetadata.activity}: ${sensorCaptureSamples.length} mẫu, ` +
+        `${elapsedSeconds.toFixed(1)} giây. Giữ điện thoại ở vị trí đã chọn.`;
+      if (sensorCaptureSamples.length >= MAX_CAPTURE_SAMPLES) {
+        stopSensorCapture("Đã dừng tự động vì đạt giới hạn 100.000 mẫu. Tải CSV để lưu lượt ghi.");
+      }
+    }
+
+    const CAPTURE_CSV_HEADERS = [
+      "activity", "participant_code", "device_placement", "sample_index",
+      "elapsed_seconds", "accel_including_gravity_x_m_s2",
+      "accel_including_gravity_y_m_s2", "accel_including_gravity_z_m_s2",
+      "rotation_rate_alpha_deg_s", "rotation_rate_beta_deg_s",
+      "rotation_rate_gamma_deg_s",
+    ];
+    const CAPTURE_ACTIVITIES = new Set([
+      "WALKING", "WALKING_UPSTAIRS", "WALKING_DOWNSTAIRS",
+      "SITTING", "STANDING", "LAYING",
+    ]);
+    const CAPTURE_PLACEMENTS = new Set(["waist", "pocket", "hand", "wrist", "other"]);
+
+    function parseCaptureCsv(text) {
+      const rows = [];
+      let row = [];
+      let field = "";
+      let quoted = false;
+      const source = text.replace(/^\uFEFF/, "");
+
+      for (let index = 0; index < source.length; index += 1) {
+        const char = source[index];
+        if (quoted) {
+          if (char === '"' && source[index + 1] === '"') {
+            field += '"';
+            index += 1;
+          } else if (char === '"') {
+            quoted = false;
+          } else {
+            field += char;
+          }
+        } else if (char === '"' && field.length === 0) {
+          quoted = true;
+        } else if (char === ",") {
+          row.push(field);
+          field = "";
+        } else if (char === "\n" || char === "\r") {
+          if (char === "\r" && source[index + 1] === "\n") index += 1;
+          row.push(field);
+          if (row.some((cell) => cell.trim() !== "")) rows.push(row);
+          row = [];
+          field = "";
+        } else {
+          field += char;
+        }
+      }
+
+      if (quoted) throw new Error("CSV có dấu ngoặc kép chưa đóng.");
+      if (field.length || row.length) {
+        row.push(field);
+        if (row.some((cell) => cell.trim() !== "")) rows.push(row);
+      }
+      return rows;
+    }
+
+    function inspectCaptureCsv(fileName, text) {
+      const rows = parseCaptureCsv(text);
+      if (rows.length < 2) throw new Error("File cần có tiêu đề và ít nhất một mẫu.");
+      if (rows.length - 1 > MAX_CAPTURE_SAMPLES) {
+        throw new Error(`Vượt giới hạn ${MAX_CAPTURE_SAMPLES.toLocaleString()} mẫu.`);
+      }
+
+      const headers = rows[0].map((cell) => cell.trim());
+      if (headers.length !== CAPTURE_CSV_HEADERS.length ||
+          headers.some((header, index) => header !== CAPTURE_CSV_HEADERS[index])) {
+        throw new Error("Tiêu đề không đúng định dạng CSV do ứng dụng thu cảm biến tạo.");
+      }
+
+      const readNumeric = (value, label, allowEmpty) => {
+        const trimmed = value.trim();
+        if (allowEmpty && trimmed === "") return null;
+        const number = Number(trimmed);
+        if (trimmed === "" || !Number.isFinite(number)) {
+          throw new Error(`${label} phải là số hữu hạn.`);
+        }
+        return number;
+      };
+
+      const intervals = [];
+      let previousElapsed = null;
+      let previousCode;
+      let previousActivity;
+      let previousPlacement;
+      let maxGapSeconds = 0;
+      let gyroCompleteRows = 0;
+
+      rows.slice(1).forEach((cells, rowIndex) => {
+        const rowNumber = rowIndex + 2;
+        if (cells.length !== CAPTURE_CSV_HEADERS.length) {
+          throw new Error(`Dòng ${rowNumber} có ${cells.length} cột, cần ${CAPTURE_CSV_HEADERS.length}.`);
+        }
+        const activity = cells[0].trim();
+        const participantCode = cells[1].trim();
+        const placement = cells[2].trim();
+        if (!CAPTURE_ACTIVITIES.has(activity)) {
+          throw new Error(`Dòng ${rowNumber}: nhãn hoạt động không hợp lệ.`);
+        }
+        if (!CAPTURE_PLACEMENTS.has(placement)) {
+          throw new Error(`Dòng ${rowNumber}: vị trí điện thoại không hợp lệ.`);
+        }
+        if (rowIndex > 0 &&
+            (activity !== previousActivity || participantCode !== previousCode ||
+             placement !== previousPlacement)) {
+          throw new Error(`Dòng ${rowNumber}: nhãn, mã người và vị trí phải thống nhất trong một lượt.`);
+        }
+        previousActivity = activity;
+        previousCode = participantCode;
+        previousPlacement = placement;
+
+        const sampleIndex = readNumeric(cells[3], `Dòng ${rowNumber}, sample_index`, false);
+        if (!Number.isInteger(sampleIndex) || sampleIndex !== rowIndex) {
+          throw new Error(`Dòng ${rowNumber}: sample_index phải tăng tuần tự từ 0.`);
+        }
+        const elapsed = readNumeric(cells[4], `Dòng ${rowNumber}, elapsed_seconds`, false);
+        if (elapsed < 0 || (previousElapsed !== null && elapsed <= previousElapsed)) {
+          throw new Error(`Dòng ${rowNumber}: thời gian phải không âm và tăng liên tục.`);
+        }
+        if (previousElapsed !== null) {
+          const interval = elapsed - previousElapsed;
+          intervals.push(interval);
+          maxGapSeconds = Math.max(maxGapSeconds, interval);
+        }
+        previousElapsed = elapsed;
+
+        for (let column = 5; column <= 7; column += 1) {
+          readNumeric(cells[column], `Dòng ${rowNumber}, gia tốc`, false);
+        }
+        const gyro = cells.slice(8, 11).map((value, index) =>
+          readNumeric(value, `Dòng ${rowNumber}, con quay ${index + 1}`, true)
+        );
+        if (gyro.every((value) => value !== null)) gyroCompleteRows += 1;
+      });
+
+      const durationSeconds = previousElapsed - readNumeric(
+        rows[1][4], "Thời gian đầu", false
+      );
+      const sortedIntervals = intervals.slice().sort((a, b) => a - b);
+      const medianInterval = sortedIntervals.length
+        ? sortedIntervals[Math.floor(sortedIntervals.length / 2)]
+        : null;
+      const estimatedHz = medianInterval > 0 ? 1 / medianInterval : null;
+      const gyroCoverage = gyroCompleteRows / (rows.length - 1);
+      const warnings = [];
+      if (durationSeconds < 2.56) warnings.push("Lượt ngắn hơn 2,56 giây");
+      if (estimatedHz === null || estimatedHz < 40 || estimatedHz > 60) {
+        warnings.push("Tần số khác khoảng 50 Hz");
+      }
+      if (maxGapSeconds > 0.1) warnings.push("Có khoảng trống thời gian > 0,1 giây");
+      if (gyroCoverage < 0.95) warnings.push("Thiếu dữ liệu con quay ở một số mẫu");
+
+      return {
+        fileName,
+        activity: previousActivity,
+        participantCode: previousCode || "—",
+        placement: previousPlacement,
+        sampleCount: rows.length - 1,
+        durationSeconds,
+        estimatedHz,
+        gyroCoverage,
+        warnings,
+      };
+    }
+
+    function addCaptureReviewRow(values, isError) {
+      const row = document.createElement("tr");
+      values.forEach((value, index) => {
+        const cell = document.createElement("td");
+        cell.textContent = String(value);
+        if (isError && index === values.length - 1) cell.style.color = "var(--danger)";
+        row.appendChild(cell);
+      });
+      document.getElementById("capture-review-tbody").appendChild(row);
+    }
+
+    document.getElementById("capture-review-files").addEventListener("change", async (event) => {
+      const files = Array.from(event.target.files || []);
+      const body = document.getElementById("capture-review-tbody");
+      const status = document.getElementById("capture-review-status");
+      body.replaceChildren();
+
+      if (!files.length) {
+        status.textContent = "Chưa chọn file.";
+        return;
+      }
+      if (files.length > 12) {
+        status.textContent = "Chọn tối đa 12 file mỗi lần.";
+        event.target.value = "";
+        return;
+      }
+      const totalBytes = files.reduce((total, file) => total + file.size, 0);
+      if (totalBytes > 20 * 1024 * 1024 || files.some((file) => file.size > 10 * 1024 * 1024)) {
+        status.textContent = "Mỗi file tối đa 10 MB, tổng dung lượng tối đa 20 MB.";
+        event.target.value = "";
+        return;
+      }
+
+      status.textContent = "Đang kiểm tra các file cục bộ trong trình duyệt...";
+      let validCount = 0;
+      let invalidCount = 0;
+      const activities = new Set();
+      const participantCodes = new Set();
+
+      for (const file of files) {
+        if (!file.name.toLowerCase().endsWith(".csv")) {
+          invalidCount += 1;
+          addCaptureReviewRow([file.name, "—", "—", "—", "—", "—", "—", "—", "Chỉ hỗ trợ CSV"], true);
+          continue;
+        }
+        try {
+          const result = inspectCaptureCsv(file.name, await file.text());
+          validCount += 1;
+          activities.add(result.activity);
+          if (result.participantCode !== "—") participantCodes.add(result.participantCode);
+          const rate = result.estimatedHz === null ? "—" : `${result.estimatedHz.toFixed(1)} Hz`;
+          const gyro = `${(result.gyroCoverage * 100).toFixed(0)}%`;
+          const quality = result.warnings.length ? `Cần xem lại: ${result.warnings.join("; ")}` : "Định dạng/tín hiệu cơ bản đạt";
+          addCaptureReviewRow([
+            result.fileName,
+            result.activity,
+            result.participantCode,
+            result.placement,
+            result.sampleCount.toLocaleString(),
+            `${result.durationSeconds.toFixed(2)} giây`,
+            rate,
+            gyro,
+            quality,
+          ], result.warnings.length > 0);
+        } catch (error) {
+          invalidCount += 1;
+          addCaptureReviewRow([file.name, "—", "—", "—", "—", "—", "—", "—", error.message], true);
+        }
+      }
+
+      status.textContent =
+        `Kiểm tra xong: ${validCount} lượt đọc được, ${invalidCount} file lỗi; ` +
+        `${activities.size} hoạt động và ${participantCodes.size} mã người tham gia khác nhau. ` +
+        "Đạt kiểm tra cấu trúc không đồng nghĩa tương thích với model UCI HAR.";
+    });
+
+    sensorCaptureForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (sensorCaptureActive) return;
+      if (sensorCaptureSamples.length > 0 && !sensorCaptureDownloaded) {
+        sensorCaptureStatus.textContent =
+          "Tải CSV của lượt trước trước khi bắt đầu lượt mới để tránh mất dữ liệu.";
+        return;
+      }
+      if (!document.getElementById("capture-consent").checked) {
+        sensorCaptureStatus.textContent = "Cần xác nhận đã có sự đồng ý tự nguyện trước khi ghi.";
+        return;
+      }
+      if (!window.isSecureContext) {
+        sensorCaptureStatus.textContent =
+          "Cảm biến trình duyệt chỉ hoạt động trên HTTPS hoặc localhost. Mở trang bảo mật trên điện thoại rồi thử lại.";
+        return;
+      }
+      if (!("DeviceMotionEvent" in window)) {
+        sensorCaptureStatus.textContent =
+          "Trình duyệt này không hỗ trợ DeviceMotion. Hãy thử trình duyệt cập nhật trên điện thoại.";
+        return;
+      }
+
+      try {
+        const participantCode = document.getElementById("capture-participant-code").value.trim();
+        if (participantCode && !/^[A-Za-z0-9_-]{1,32}$/.test(participantCode)) {
+          throw new Error("Mã người tham gia chỉ được dùng chữ Latin, số, gạch ngang hoặc gạch dưới (tối đa 32 ký tự).");
+        }
+        const motionApi = window.DeviceMotionEvent;
+        if (typeof motionApi.requestPermission === "function") {
+          const permission = await motionApi.requestPermission();
+          if (permission !== "granted") {
+            throw new Error("Bạn chưa cấp quyền truy cập cảm biến chuyển động.");
+          }
+        }
+
+        sensorCaptureSamples = [];
+        sensorCaptureMetadata = {
+          participantCode,
+          activity: document.getElementById("capture-activity").value,
+          placement: document.getElementById("capture-placement").value,
+        };
+        sensorCaptureDownloaded = false;
+        sensorCaptureStartTime = performance.now();
+        sensorCaptureActive = true;
+        window.addEventListener("devicemotion", handleDeviceMotion);
+        sensorCaptureStartButton.disabled = true;
+        sensorCaptureStopButton.disabled = false;
+        sensorCaptureDownloadButton.disabled = true;
+        sensorCaptureStatus.textContent =
+          "Đã bắt đầu ghi cục bộ. Nếu số mẫu chưa tăng, kiểm tra quyền cảm biến và cử động nhẹ thiết bị.";
+      } catch (error) {
+        sensorCaptureStatus.textContent = error.message || "Không thể cấp quyền cảm biến.";
+      }
+    });
+
+    sensorCaptureStopButton.addEventListener("click", () => {
+      stopSensorCapture(
+        sensorCaptureSamples.length
+          ? `Đã dừng: ${sensorCaptureSamples.length} mẫu. Tải CSV về máy để lưu.`
+          : "Đã dừng nhưng không nhận được mẫu cảm biến. Hãy kiểm tra quyền và hỗ trợ của thiết bị."
+      );
+    });
+
+    sensorCaptureDownloadButton.addEventListener("click", () => {
+      if (sensorCaptureActive || !sensorCaptureSamples.length || !sensorCaptureMetadata) return;
+      const quoteCsv = (value) => `"${String(value).replace(/"/g, '""')}"`;
+      const metadata = sensorCaptureMetadata;
+      const rows = [
+        ["activity", "participant_code", "device_placement", "sample_index", "elapsed_seconds",
+          "accel_including_gravity_x_m_s2", "accel_including_gravity_y_m_s2",
+          "accel_including_gravity_z_m_s2", "rotation_rate_alpha_deg_s",
+          "rotation_rate_beta_deg_s", "rotation_rate_gamma_deg_s"],
+        ...sensorCaptureSamples.map((sample) => [
+          metadata.activity,
+          metadata.participantCode,
+          metadata.placement,
+          ...sample,
+        ]),
+      ];
+      const csv = rows.map((row) => row.map(quoteCsv).join(",")).join("\r\n");
+      const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const safeCode = metadata.participantCode.replace(/[^A-Za-z0-9_-]/g, "_") || "anonymous";
+      link.href = url;
+      link.download = `raw_${metadata.activity}_${safeCode}_${Date.now()}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      sensorCaptureDownloaded = true;
+      sensorCaptureStartButton.disabled = false;
+      sensorCaptureStatus.textContent =
+        `Đã tạo CSV ${sensorCaptureSamples.length} mẫu. Tệp đã tải về; chỉ giữ bản trong trình duyệt đến khi đóng trang.`;
+    });
+
+    window.addEventListener("pagehide", () => {
+      if (sensorCaptureActive) {
+        sensorCaptureActive = false;
+        window.removeEventListener("devicemotion", handleDeviceMotion);
+      }
+    });
+
     async function loadGeneralizationResults() {
       const status = document.getElementById("generalization-status");
       try {
